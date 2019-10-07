@@ -1,0 +1,713 @@
+# 2019-10-02 to 10-03
+
+group 1: 200 subjects, Euclid=08.94 when columns with 06+ unique values excluded
+
+When demographic variables with 10+ unique values excluded:
+100 subjects Euclid values:
+group 1: 10.22, 15.18; group 2: 13.93, 20.03
+200 subjects Euclid values:
+group 1: 11.55, 12.07, 06.85; group 2: 12.82, 13.58, 15.56
+300 subjects Euclid values: 
+group 1: 09.91, 05.57, 08.68, average=08.05; group 2: 07.62, 13.66, 12.24, average=11.17
+400 subjects Euclid values:
+group 1: 10.41, 09.67, 10.75, average=10.28; group 2: 07.72, 08.48, 08.31, average=08.17
+500 subjects Euclid values:
+group 1: 10.68, 04.26, 08.97; group 2: 10.56, 11.92, 07.52
+1000 subjects Euclid values:
+group 1: 08.03, 05.00, 07.79; group 2: 4.03, 08.35, 07.44
+1500 subjects Euclid values:
+group 1: 05.59, 06.43, 03.59, 05.64; group 2: 05.10, 04.09, 04.34, 04.58
+2000 subjects Euclid values:
+group 1: 04.00, 05.50, 04.02; group 2: 04.11, 04.77, 05.24
+
+
+All correlations:
+[{'Correlation': 0.9973411429159067, 'Subjects': 50}, {'Correlation': 0.9971304126666826, 'Subjects': 50}, {'Correlation': 0.9973227543853855, 'Subjects': 50}, {'Correlation': 0.9970766713198155, 'Subjects': 50}, {'Correlation': 0.9972033126981811, 'Subjects': 50}, {'Correlation': 0.9986480569612208, 'Subjects': 100}, {'Correlation': 0.9985629436590983, 'Subjects': 100}, {'Correlation': 0.9986610147584656, 'Subjects': 100}, {'Correlation': 0.9982036941806784, 'Subjects': 100}, {'Correlation': 0.9985521972653367, 'Subjects': 100}, {'Correlation': 0.9992005191299732, 'Subjects': 200}, {'Correlation': 0.9992544933564548, 'Subjects': 200}, {'Correlation': 0.9992387769337407, 'Subjects': 200}, {'Correlation': 0.9992463966928847, 'Subjects': 200}, {'Correlation': 0.9991632279730002, 'Subjects': 200}, {'Correlation': 0.9995220315831073, 'Subjects': 300}, {'Correlation': 0.9995561161757054, 'Subjects': 300}, {'Correlation': 0.9994900715535892, 'Subjects': 300}, {'Correlation': 0.9994704398719584, 'Subjects': 300}, {'Correlation': 0.9994788862174072, 'Subjects': 300}]
+Correlations:
+[{'Correlation': 0.9973411429159067, 'Subjects': 50}, {'Correlation': 0.9971304126666826, 'Subjects': 50}, {'Correlation': 0.9973227543853855, 'Subjects': 50}, {'Correlation': 0.9970766713198155, 'Subjects': 50}, {'Correlation': 0.9972033126981811, 'Subjects': 50}, {'Correlation': 0.9986480569612208, 'Subjects': 100}, {'Correlation': 0.9985629436590983, 'Subjects': 100}, {'Correlation': 0.9986610147584656, 'Subjects': 100}, {'Correlation': 0.9982036941806784, 'Subjects': 100}, {'Correlation': 0.9985521972653367, 'Subjects': 100}, {'Correlation': 0.9992005191299732, 'Subjects': 200}, {'Correlation': 0.9992544933564548, 'Subjects': 200}, {'Correlation': 0.9992387769337407, 'Subjects': 200}, {'Correlation': 0.9992463966928847, 'Subjects': 200}, {'Correlation': 0.9991632279730002, 'Subjects': 200}, {'Correlation': 0.9995220315831073, 'Subjects': 300}, {'Correlation': 0.9995561161757054, 'Subjects': 300}, {'Correlation': 0.9994900715535892, 'Subjects': 300}, {'Correlation': 0.9994704398719584, 'Subjects': 300}, {'Correlation': 0.9994788862174072, 'Subjects': 300}]
+Averages:
+          Correlation
+Subjects             
+50           0.997215
+100          0.998526
+200          0.999221
+300          0.999504
+Started at Thu Oct  3 17:08:13 PDT 2019
+
+Finished at Thu Oct  3 20:54:15 PDT 2019
+
+
+All maximums:
+   Euclidean Distance  Group  Subjects
+0           20.985719      2       100
+1           15.149415      1       200
+2           18.446618      1       300
+3           10.390439      2       500
+4            7.758950      1      1000
+Logarithmic best-fit equation: 47.480814926709236 + -5.731814644545139 * ln(x)
+Started at Thu Oct  3 15:16:24 PDT 2019
+[Finished at approximately Thu Oct  3 16:46 PDT 2019]
+
+
+All frequency info:
+   Group  Subjects  Euclidean Distance
+0      1       400            8.307420
+1      2       400            7.246313
+2      1       500            8.964611
+3      2       500            5.792034
+All maximums:
+   Euclidean Distance  Group  Subjects
+0            8.307420      1       400
+1            8.964611      1       500
+/usr/local/lib/python3.5/dist-packages/scipy/optimize/minpack.py:779: OptimizeWarning: Covariance of the parameters could not be estimated
+  category=OptimizeWarning)
+Logarithmic best-fit equation: -9.338321904315027 + 2.945146688484764 * log(x)
+Started at Thu Oct  3 12:56:00 PDT 2019
+
+Finished at Thu Oct  3 12:59:02 PDT 2019
+
+
+
+    Group  Subjects  Euclidean Distance
+0       1      1500            6.429686
+1       2      1500            4.098929
+2       1      1500            3.598471
+3       2      1500            4.343528
+4       1      1500            5.646478
+5       2      1500            4.580190
+6       1      2000            3.999921
+7       2      2000            4.106759
+8       1      2000            5.501147
+9       2      2000            4.773722
+10      1      2000            4.027465
+11      2      2000            5.241898
+
+Match's Euclidean distance=5
+Group 2 frequency distribution info:
+count        299.000000
+mean           5.567632
+std            1.603220
+min            1.337082
+25%            4.439532
+50%            5.475438
+75%            6.629142
+max           11.278898
+Subjects    1500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [5.10349504415345]
+
+Match's Euclidean distance=6
+Group 1 frequency distribution info:
+count         54.000000
+mean           5.660925
+std            1.455778
+min            2.946052
+25%            4.758535
+50%            5.668308
+75%            6.408414
+max            9.716006
+Subjects    1500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [5.592753861851891]
+
+
+Match's Euclidean distance=20
+Group 2 frequency distribution info:
+count       1323.000000
+mean          19.471904
+std            7.343903
+min            3.346292
+25%           14.577002
+50%           19.022394
+75%           22.442184
+max           61.077212
+Subjects     100.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [20.033778230050455]
+
+Match's Euclidean distance=15
+Group 1 frequency distribution info:
+count       1620.000000
+mean          19.673750
+std            8.072847
+min            3.067690
+25%           14.664725
+50%           18.438032
+75%           22.329929
+max           71.558273
+Subjects     100.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [15.181136016271386]
+
+
+Match's Euclidean distance=8
+Group 2 frequency distribution info:
+count        16.000000
+mean          9.162508
+std           3.785947
+min           3.583770
+25%           6.935828
+50%           8.238236
+75%          10.761228
+max          17.394638
+Subjects    500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [7.51978840484612]
+
+Match's Euclidean distance=9
+Group 1 frequency distribution info:
+count        64.000000
+mean          8.398146
+std           2.766081
+min           3.541879
+25%           6.329066
+50%           8.458778
+75%           9.996524
+max          16.718577
+Subjects    500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [8.973267347760673]
+
+Match's Euclidean distance=8
+Group 2 frequency distribution info:
+count        44.000000
+mean          8.882739
+std           2.748865
+min           3.603357
+25%           7.074237
+50%           8.653438
+75%          10.316763
+max          16.649676
+Subjects    500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [7.572711051172094]
+
+
+Match's Euclidean distance=9
+Group 1 frequency distribution info:
+count         3.000000
+mean         10.748041
+std           3.335752
+min           8.612392
+25%           8.826100
+50%           9.039808
+75%          11.815865
+max          14.591923
+Subjects    500.000000
+dtype: float64
+
+Euclidean
+
+Match's Euclidean distance=12
+Group 2 frequency distribution info:
+count       182.000000
+mean          8.978270
+std           3.034743
+min           2.492048
+25%           6.804096
+50%           8.187222
+75%          11.134977
+max          17.990990
+Subjects    500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [11.924546041383655]
+
+
+Match's Euclidean distance=4
+Group 1 frequency distribution info:
+count         2.000000
+mean          6.642099
+std           3.367038
+min           4.261244
+25%           5.451672
+50%           6.642099
+75%           7.832527
+max           9.022955
+Subjects    500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [4.261244324151833]
+
+Match's Euclidean distance=11
+Group 2 frequency distribution info:
+count        35.000000
+mean          8.553731
+std           3.332527
+min           3.043704
+25%           6.644087
+50%           7.802872
+75%          11.377963
+max          17.596535
+Subjects    500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [10.567905696072213]
+
+
+Group 1 frequency distribution info:
+count         6.000000
+mean         10.772048
+std           3.353038
+min           4.219348
+25%          10.915829
+50%          11.692137
+75%          12.717680
+max          13.312081
+Subjects    500.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [10.683817530119446]
+
+
+Match's Euclidean distance=16
+Group 2 frequency distribution info:
+count       498.000000
+mean         13.879766
+std           5.152717
+min           3.419297
+25%          10.109330
+50%          13.304869
+75%          17.257675
+max          32.319326
+Subjects    200.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [15.560579126747545]
+
+Match's Euclidean distance=7
+Group 1 frequency distribution info:
+count       127.000000
+mean         13.736964
+std           5.544963
+min           4.120474
+25%           9.810913
+50%          12.762702
+75%          16.776358
+max          28.868917
+Subjects    200.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [6.847347613855446]
+
+
+Match's Euclidean distance=14
+Group 2 frequency distribution info:
+count       424.000000
+mean         13.921699
+std           5.321856
+min           3.456507
+25%          10.294451
+50%          12.992343
+75%          17.173102
+max          34.816625
+Subjects    200.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [13.577009088902608]
+
+
+Match's Euclidean distance=12
+Group 1 frequency distribution info:
+count        93.000000
+mean         14.267345
+std           4.904056
+min           5.851555
+25%          10.754531
+50%          13.696265
+75%          16.979563
+max          32.965135
+Subjects    200.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [12.073209190170921]
+
+
+Match's Euclidean distance=7
+Group 2 frequency distribution info:
+count        307.000000
+mean           6.317066
+std            1.993291
+min            1.944801
+25%            4.938306
+50%            6.132929
+75%            7.566828
+max           13.190267
+Subjects    1000.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [7.4446796141119]
+
+
+Match's Euclidean distance=8
+Group 1 frequency distribution info:
+count         47.000000
+mean           6.504853
+std            2.032652
+min            3.141806
+25%            5.316714
+50%            6.350747
+75%            7.384578
+max           12.900114
+Subjects    1000.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [7.785832855015543]
+
+
+Match's Euclidean distance=8
+Group 2 frequency distribution info:
+count        611.000000
+mean           6.541475
+std            2.027919
+min            1.851555
+25%            5.109103
+50%            6.395097
+75%            7.853626
+max           13.093310
+Subjects    1000.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [8.351461430880814]
+
+Match's Euclidean distance=5
+Group 1 frequency distribution info:
+count         21.000000
+mean           7.033170
+std            2.144536
+min            3.215227
+25%            5.498499
+50%            6.616173
+75%            8.806473
+max           12.320067
+Subjects    1000.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [5.003070937497549]
+
+Group 2 frequency distribution info:
+count         50.000000
+mean           6.222890
+std            1.755591
+min            1.897599
+25%            4.999271
+50%            6.347869
+75%            7.280656
+max           10.298403
+Subjects    1000.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [4.028172404795082]
+
+Group 1 frequency distribution info:
+count         21.000000
+mean           6.825577
+std            2.866021
+min            2.719846
+25%            4.694081
+50%            6.225473
+75%            8.217473
+max           14.187194
+Subjects    1000.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [8.027456826368246]
+
+Match's Euclidean distance=8
+Group 2 frequency distribution info:
+count       299.000000
+mean          9.917483
+std           3.472624
+min           2.434084
+25%           7.290982
+50%           9.876394
+75%          12.121043
+max          21.597946
+Subjects    400.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [8.312409692926524]
+
+Match's Euclidean distance=11
+Group 1 frequency distribution info:
+count        55.000000
+mean         10.447017
+std           3.373355
+min           2.577912
+25%           7.794204
+50%          10.589731
+75%          12.842760
+max          18.037646
+Subjects    400.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [10.745152739844698]
+
+Match's Euclidean distance=8
+Group 2 frequency distribution info:
+count       206.000000
+mean          9.915204
+std           3.448940
+min           2.411676
+25%           7.571315
+50%           9.226516
+75%          11.886186
+max          19.958300
+Subjects    400.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [8.477427825370302]
+
+Match's Euclidean distance=10
+Group 1 frequency distribution info:
+count        25.000000
+mean         10.181908
+std           3.670473
+min           4.569033
+25%           8.128617
+50%           9.187645
+75%          12.365000
+max          16.843734
+Subjects    400.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [9.665097415405043
+
+Group 2 frequency distribution info:
+count        50.000000
+mean         10.253358
+std           3.791224
+min           4.607377
+25%           7.582763
+50%           9.380519
+75%          12.450028
+max          20.144736
+Subjects    400.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [7.718221128381546]
+
+Match's Euclidean distance=10
+Group 1 frequency distribution info:
+count         4.000000
+mean          7.904991
+std           2.495022
+min           4.523869
+25%           6.982978
+50%           8.342953
+75%           9.264966
+max          10.410187
+Subjects    400.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [10.410186765496864]
+
+Match's Euclidean distance=12
+Group 2 frequency distribution info:
+count        90.000000
+mean         11.149839
+std           3.876075
+min           3.291935
+25%           8.354636
+50%          11.110037
+75%          13.147688
+max          22.558098
+Subjects    300.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [12.238232267172348]
+
+Match's Euclidean distance=9
+Group 1 frequency distribution info:
+count        74.000000
+mean         11.128049
+std           3.605601
+min           4.041017
+25%           8.881998
+50%          10.516492
+75%          13.582040
+max          20.756192
+Subjects    300.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [8.677829732944575]
+
+Match's Euclidean distance=8
+Group 2 frequency distribution info:
+count        16.000000
+mean         11.031167
+std           4.331006
+min           4.508631
+25%           8.077036
+50%          10.175778
+75%          12.350118
+max          20.569510
+Subjects    300.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [7.617701454014616]
+
+Match's Euclidean distance=6
+Group 1 frequency distribution info:
+count        30.000000
+mean         11.266233
+std           4.233228
+min           4.454550
+25%           8.452447
+50%          11.259884
+75%          12.634275
+max          23.588972
+Subjects    300.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [5.573072875087334]
+
+Match's Euclidean distance=14
+Group 2 frequency distribution info:
+count       181.000000
+mean         11.782295
+std           4.026732
+min           4.089989
+25%           8.710195
+50%          11.454125
+75%          14.182731
+max          22.573351
+Subjects    300.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [13.656869622735327]
+
+Match's Euclidean distance=10
+Group 1 frequency distribution info:
+count        15.000000
+mean         11.072582
+std           4.116139
+min           6.247919
+25%           9.363014
+50%          10.329323
+75%          11.862703
+max          24.004868
+Subjects    300.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [9.91437840533752
+
+Match's Euclidean distance=14
+Group 2 frequency distribution info:
+count       510.000000
+mean         19.846258
+std           7.473255
+min           3.449228
+25%          15.132799
+50%          19.386926
+75%          22.704184
+max          57.193313
+Subjects    100.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [13.93519703591215]
+
+Match's Euclidean distance=10
+Group 1 frequency distribution info:
+count       419.000000
+mean         18.974710
+std           8.267141
+min           3.025951
+25%          13.658359
+50%          18.089706
+75%          21.546733
+max          56.786997
+Subjects    100.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [10.216232039669752]
+
+Match's Euclidean distance=13
+Group 2 frequency distribution info:
+count       245.000000
+mean         13.538131
+std           4.563665
+min           3.423598
+25%          10.093890
+50%          13.070624
+75%          17.095489
+max          33.179462
+Subjects    200.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [12.817691608546502]
+
+Match's Euclidean distance=12
+Group 1 frequency distribution info:
+count         5.000000
+mean         11.584202
+std           2.130013
+min           9.197573
+25%          10.376174
+50%          11.554478
+75%          11.909190
+max          14.883594
+Subjects    200.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [11.55447814303037
+
+Match's Euclidean distance=9
+Group 1 frequency distribution info:
+count        14.000000
+mean         10.332650
+std           3.954666
+min           3.936021
+25%           7.869588
+50%          10.178054
+75%          13.261739
+max          17.713192
+Subjects    200.000000
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: [8.944469540132703
+
+# end 2019-10-02
+
+
+
+# 2019-10-01
+
+Group 2 frequency distribution info:
+count    100.000000
+mean      28.783415
+std       12.137815
+min       14.252168
+25%       21.076998
+50%       22.185028
+75%       34.899007
+max       67.893404
+dtype: float64
+
+Euclidean distances of samples that passed chi squared comparison: []
+Frequency info: [count    100.000000
+mean      28.047254
+std       13.017109
+min       14.903202
+25%       20.746908
+50%       21.768458
+75%       31.625295
+max      100.296962
+dtype: float64, count    100.000000
+mean      28.783415
+std       12.137815
+min       14.252168
+25%       21.076998
+50%       22.185028
+75%       34.899007
+max       67.893404
+dtype: float64]
+
+# end 2019-10-01
