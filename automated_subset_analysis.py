@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-10-07
+Last Updated 2019-10-08
 """
 
 ##################################
@@ -16,8 +16,6 @@ Last Updated 2019-10-07
 ##################################
 
 import argparse
-# import ggplot  # requires tkinter?
-# import matplotlib
 import nibabel
 import numpy as np
 import os
@@ -32,7 +30,6 @@ DEFAULT_DEMO_TOTAL_FILE = "total_group_matching_stats.csv"
 DEFAULT_FOLDER = "subset-analysis-output"
 DEFAULT_N_ANALYSES = 1
 DEFAULT_SUBSET_SIZE = [50, 100, 200, 300, 400, 500]
-DEFAULT_TEMPLATE = "full_group_average_template.pconn.nii"
 PWD = os.getcwd()
 
 

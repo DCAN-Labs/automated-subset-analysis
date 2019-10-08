@@ -136,4 +136,4 @@ The data and methods used to calculate that equation can be found in `euclidean_
 
 ## Meta
 
-This `README` was created on 2019-10-03 by Greg Conan and last updated on 2019-10-07 by Greg Conan.
+This `README` was created on 2019-10-03 by Greg Conan and last updated on 2019-10-08 by Greg Conan.
