@@ -1,6 +1,6 @@
 # Automated Subset Analysis
 
-These scripts were written for the ABCD resource paper. They use Python's `argparse` package so that they can be run from the BASH command line and accept command-line arguments.
+These scripts were written for the ABCD resource paper. They use Python's `argparse` package so that they can be run from the BASH command line and accept command-line arguments. They should both be run from within the `automated_subset_analysis` directory.
 
 ## Purpose of Scripts
 
@@ -12,7 +12,7 @@ This script accepts demographic data for 2 datasets. For each dataset, it random
 
 - `euclidean_threshold_estimator.py`
 
-Uses the same code as `automated_subset_analysis.py` to randomly generate subsets, but instead of analyzing them, it estimates the maximum Euclidean distance required to create a subset which is not significantly different from a total set. Prints out a list of these estimated Euclidean distances, including a logarithmic regression equation to estimate the Euclidean distance threshold for a specific number of subjects. (*Warning: The calculated regression equation is not correct yet*)
+Uses the same code as `automated_subset_analysis.py` to randomly generate subsets, but instead of analyzing them, it estimates the maximum Euclidean distance required to create a subset which is not significantly different from a total set. Prints out a list of these estimated Euclidean distances, including a logarithmic regression equation to estimate the Euclidean distance threshold for a specific number of subjects. (*Warning: The calculated regression equation may not be accurate yet*)
 
 ## Dependencies
 
@@ -75,7 +75,6 @@ Calculate the correlations between average matrices of already-generated subsets
 
 ```
 python3 automated_subset_analysis.py /mnt/rose/shared/projects/ABCD/avg_pconn_maker/gp1_10min_pconn.csv /mnt/rose/shared/projects/ABCD/avg_pconn_maker/gp2_10min_pconn.csv --skip_subset_generation subsets --output correls
-
 ```
 
 ## Usage: `euclidean_threshold_estimator.py`

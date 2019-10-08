@@ -496,13 +496,13 @@ def make_visualizations(correls_df):
     another titled "Correlations" where both have numeric values
     :return: N/A
     """
-
     # Make scatter plot mapping subset size to pairwise correlations
     scatter_plot = plotly.graph_objs.Scatter(
         x=correls_df["Subjects"], y=correls_df["Correlation"], mode="markers",
-        name="All correlations")
+        name="All correlations", line_color="rgba(255,0,0,1)",
+        marker={"size": 8})
 
-    # Add lines to plot using averages of each subset size
+    # Add average lines to plot using averages of each subset size
     averages = correls_df.groupby(["Subjects"]).agg(
         lambda x: x.unique().sum()/x.nunique())
     print("Averages:\n" + str(averages))
@@ -510,39 +510,68 @@ def make_visualizations(correls_df):
         x=averages.index.values, y=averages["Correlation"], mode="lines",
         name="Average correlations")
 
-    # Add logarithmic fit function to estimate correlations given subset size
-    # log_fit = get_logarithmic_fit(cli_args.subset_size, )
-    # logs = plotly.graph_objs.Scatter(x=cli_args.subset_size, )
+    # Add upper and lower bounds of data to plot as lines
+    lower_plot = plotly.graph_objs.Scatter(
+        x=averages.index.values, y=correls_df.groupby(["Subjects"]).agg(
+            lambda x: x.quantile(0)
+        )["Correlation"], fill="tonexty", showlegend=False,
+        fillcolor="rgba(255,0,0,0.2)", line_color="rgba(0,0,0,0)"
+    )
+    upper_plot = plotly.graph_objs.Scatter(
+        x=averages.index.values, y=correls_df.groupby(["Subjects"]).agg(
+            lambda x: x.quantile(1)
+        )["Correlation"], showlegend=False, line_color="rgba(0,0,0,0)"
+    )
 
     # Show plots
+    plotly.io.show({
+        "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
+        "layout": get_plot_layout(correls_df["Correlation"].min(),
+                                  correls_df["Correlation"].max())
+    })
+
+
+def get_plot_layout(y_min, y_max):
+    """
+    Get the parameters for creating a pretty plot visualization. The parameters
+    are needed to determine the range of the x- and y-axes.
+    :param y_min: Lowest y-value to be displayed on the graph
+    :return: Nested dictionary containing all needed plot attributes
+    """
     title_font_size = 35
     font_size = 25
-    all_plots = plotly.graph_objs.Figure(
-        data=[scatter_plot, avgs_plot],
-        layout_title_text="Correlations Between Average Subsets",
-        layout_title_font={"size": title_font_size}
-    )
-    all_plots.update_xaxes(
-        title_text="Number of Subjects",
-        title_font={"size": title_font_size}
-    )
-    all_plots.update_yaxes(
-        title_text="Correlation",
-        title_font={"size": title_font_size}
-    )
-    all_plots.show()  # TODO renderer="png"
+    black = "rgb(0, 0, 0)"
+    white = "rgb(255, 255, 255)"
+    y_range_step = (y_max - y_min)/10
 
+    def get_axis_layout(title, **kwargs):
+        result = {
+            "title": {"font": {"size": title_font_size}, "text": title},
+            "tickcolor": black, "ticklen": 15, "tickfont": {"size": font_size},
+            "ticks": "outside", "tickwidth": 2, "showline": True,
+            "linecolor": black, "linewidth": 2
+        }
+        result.update(kwargs)
+        return result
 
-def get_logarithmic_fit(x, y):
-    """
-    Given two arrays of numbers which have equal length, return a logarithmic
-    equation to predict y-values given x-values
-    :param x: numpy array of numbers
-    :param y: numpy array of numbers
-    :return: The logarithmic best-fit curve equation for x and y, as a string
-    """
-    coefs = np.polyfit(np.log(x), y, 1)
-    return " + ".join((str(coefs[1]), str(coefs[0]) + " * ln(x)"))
+    return {
+        "title": {
+            "text": "Correlations Between Average Subsets",
+            "font": {"size": title_font_size},
+            "xanchor": "center",
+            "x": 0.5
+        },
+        "paper_bgcolor": white,
+        "plot_bgcolor": white,
+        "legend": {"font": {"size": font_size}, "y": 0.4, "x": 0.5},
+        "xaxis": get_axis_layout(
+            title="Sample Size (n)", tick0=0, dtick=100, tickmode="linear"
+        ),
+        "yaxis": get_axis_layout(
+            title="Correlation (r)", nticks=5, tickmode="auto",
+            range=(y_min - y_range_step, y_max + y_range_step),
+        )
+    }
 
 
 if __name__ == '__main__':
