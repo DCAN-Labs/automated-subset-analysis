@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-10-08
+Last Updated 2019-10-09
 """
 
 ##################################
@@ -522,7 +522,8 @@ def make_visualizations(correls_df, fill_area):
         x=averages.index.values, y=averages["Correlation"], mode="lines",
         name="Average correlations")
 
-    # Get confidence intervals and add as upper & lower bounds to plot as lines
+    # Add upper & lower bounds (all data or confidence intervals) of shaded
+    # area to plot as lines
     bounds = get_shaded_area_bounds(correls_df, fill_area)
     bounds_params = ({"showlegend": False} if fill_area == "all" else
                      {"name": "95% confidence interval", "showlegend": True})
