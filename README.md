@@ -12,7 +12,7 @@ This script accepts demographic data for 2 datasets. For each dataset, it random
 
 - `euclidean_threshold_estimator.py`
 
-Uses the same code as `automated_subset_analysis.py` to randomly generate subsets, but instead of analyzing them, it estimates the maximum Euclidean distance required to create a subset which is not significantly different from a total set. Prints out a list of these estimated Euclidean distances, including a logarithmic regression equation to estimate the Euclidean distance threshold for a specific number of subjects. (*Warning: The calculated regression equation may not be accurate yet*)
+Uses the same code as `automated_subset_analysis.py` to randomly generate subsets, but instead of analyzing them and producing visualizations, it estimates the maximum Euclidean distance required to create a subset which is not significantly different from a total set. It then prints out a list of these estimated Euclidean distances, including a logarithmic regression equation to estimate the Euclidean distance threshold for a specific number of subjects. (*Warning: The calculated regression equation may not be accurate yet*)
 
 ## Dependencies
 
@@ -39,27 +39,33 @@ Example of a basic call to this script:
 python3 automated_subset_analysis.py /mnt/rose/shared/projects/ABCD/avg_pconn_maker/gp1_10min_pconn.csv /mnt/rose/shared/projects/ABCD/avg_pconn_maker/gp2_10min_pconn.csv
 ```
 
-### Optional Arguments: File Paths with Default Values
+### Optional Arguments
+
+#### File Paths with Default Values
 
 1. `--output` takes one file path to a directory where all files produced by this script will be saved. If the directory already exists, then this script will add files to it and only overwrite files with conflicting filenames. If not, then this script will create a directory at the `--output` path. If this flag is excluded, then the script will save files to a subdirectory called `subset-analysis-output` of the present working directory.
 
 1. `--parent_path` takes one file path to the parent directory of a directory containing .pconn files. The `group_1_demo_file` and the `group_2_demo_file` should both have a column named `pconn_10min` where each row has a path to the `.pconn` file for the subject in that row. That path should be a relative path from the `--parent_path` directory, the value given as this argument. So, `--parent_path` must be a valid path to a readable directory. By default, if this flag is excluded, then `--parent_path` will be the longest common path directory of `group_1_demo_file` and `group_2_demo_file`.
 
-### Optional Arguments: Numerical Values
+#### Numerical Values
 
 1. `--n_analyses` takes one positive integer, the number of times to generate a pair of subsets and analyze them. For every integer given in the `--subset_size` list, this script will randomly generate `--n_analyses` subsets, creating `--subset_size` * `--n_analyses` subset `.csv` files in total.
 
 1. `--subset_size` takes one positive integer or a list of positive integers, the number of subjects to include in subsets. Include a list of whole numbers to generate subsets pairs of different sizes. By default, the subset sizes will be `[50, 100, 200, 300]`.
 
-### Optional Arguments: Runtime Options
-
-1. `--skip_subset_generation` takes either no parameters or one path to a readable directory as a parameter. Include this flag to calculate correlations and create the visualization using existing subsets instead of randomly generating new ones. By default, the subsets to use for calculating the correlations between average matrices and producing a visualization will be assumed to exist in the `--output` folder. To load subsets from a different folder, add the path to this flag as a parameter.
+#### Flags to Skip Steps of Process
 
 1. `--only_make_graphs` takes either no parameters or one path to a readable `.csv` file as a parameter. Include this flag to import data from a `.csv` file instead of making a new one, just to make a graph visualization of already-existing data. If this flag is included, it must be a path to a readable `.csv` file with 2 columns: `Subjects` (the number of subjects in each subset) and `Correlation` (the correlation between each randomly generated subset in that pair). If the `.csv` was already made by this script, it will be called `correlations.csv`. 
 
-1. `--inverse_fisher_z` takes no parameters. Include this flag to do an inverse Fisher-Z transformation on the matrices imported from the `.pconn` files of the data before getting correlations.
+1. `--skip_subset_generation` takes either no parameters or one path to a readable directory as a parameter. Include this flag to calculate correlations and create the visualization using existing subsets instead of randomly generating new ones. By default, the subsets to use for calculating the correlations between average matrices and producing a visualization will be assumed to exist in the `--output` folder. To load subsets from a different folder, add the path to this flag as a parameter.
 
 If `--skip_subset_generation` or `--only_make_graphs` is included, then `--subset_size` and `--n_analyses` will do nothing. If `--only_make_graphs` is included, then `--skip_subset_generation` will do nothing.
+
+#### Other Flags
+
+1. `--inverse_fisher_z` takes no parameters. Include this flag to do an inverse Fisher-Z transformation on the matrices imported from the `.pconn` files of the data before getting correlations.
+
+1. `--fill` takes one parameter, a string that is either `all` or `confidence_interval`. Include this flag to choose which data to shade in the visualization. Choose `all` to shade in the area within the minimum and maximum correlations in the dataset. Choose `confidence_interval` to only shade in the 95% confidence interval of the data. By default, this argument will be `confidence_interval`.
 
 For more information, including the shorthand flags for each option, run this script with the `--help` command: `python3 automated_subset_analysis.py --help`
 
@@ -136,4 +142,7 @@ The data and methods used to calculate that equation can be found in `euclidean_
 
 ## Meta
 
-This `README` was created on 2019-10-03 by Greg Conan and last updated on 2019-10-08 by Greg Conan.
+Information about this `README` file:
+
+- Created by Greg Conan, 2019-10-03
+- Last Updated by Greg Conan, 2019-10-09

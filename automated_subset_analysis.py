@@ -22,6 +22,7 @@ import os
 import pandas as pd
 import plotly
 import psutil
+from scipy.stats import sem, t
 from scipy.spatial.distance import euclidean
 import subprocess
 
@@ -72,7 +73,7 @@ def main():
             get_correls_between_avg_subsets(all_subsets, cli_args), cli_args
         )
 
-    make_visualizations(correls_df)
+    make_visualizations(correls_df, cli_args.fill)
 
     print("Started at " + started_at)
     print("Finished at " + subprocess.check_output("date").decode("utf-8"))
@@ -105,6 +106,19 @@ def get_cli_args():
         type=validate_readable_file,
         help=("Path to a .csv file containing all demographic information "
               "about the subjects in group 2.")
+    )
+
+    # Optional: Choose what to fill in the visualization
+    parser.add_argument(
+        "-f",
+        "--fill",
+        choices=["confidence_interval", "all"],
+        default="confidence_interval",
+        help=("Choose which data to shade in the visualization. Choose 'all' "
+              "to shade in the area within the minimum and maximum "
+              "correlations in the dataset. Choose 'confidence_interval' to "
+              "only shade in the 95% confidence interval of the data. By "
+              "default, this argument will be 'confidence_interval'.")
     )
 
     # Optional: Import data from .csv files already created by this script
@@ -486,11 +500,12 @@ def save_correlations_and_get_df(correls_list, cli_args):
     return n_vs_correls_df
 
 
-def make_visualizations(correls_df):
+def make_visualizations(correls_df, fill_area):
     """
     Create a graph visualization from correlation data
     :param correls_df: pandas.DataFrame with one column titled "Subjects" and
     another titled "Correlations" where both have numeric values
+    :param fill_area: A string that is either "all" or "confidence_interval"
     :return: N/A
     """
     # Make scatter plot mapping subset size to pairwise correlations
@@ -507,17 +522,18 @@ def make_visualizations(correls_df):
         x=averages.index.values, y=averages["Correlation"], mode="lines",
         name="Average correlations")
 
-    # Add upper and lower bounds of data to plot as lines
+    # Get confidence intervals and add as upper & lower bounds to plot as lines
+    bounds = get_shaded_area_bounds(correls_df, fill_area)
+    bounds_params = ({"showlegend": False} if fill_area == "all" else
+                     {"name": "95% confidence interval", "showlegend": True})
     lower_plot = plotly.graph_objs.Scatter(
-        x=averages.index.values, y=correls_df.groupby(["Subjects"]).agg(
-            lambda x: x.quantile(0)
-        )["Correlation"], fill="tonexty", showlegend=False,
-        fillcolor="rgba(255,0,0,0.2)", line_color="rgba(0,0,0,0)"
+        x=averages.index.values, y=bounds[0], fill="tonexty",
+        fillcolor="rgba(255,0,0,0.2)", line_color="rgba(0,0,0,0)",
+        **bounds_params
     )
     upper_plot = plotly.graph_objs.Scatter(
-        x=averages.index.values, y=correls_df.groupby(["Subjects"]).agg(
-            lambda x: x.quantile(1)
-        )["Correlation"], showlegend=False, line_color="rgba(0,0,0,0)"
+        x=averages.index.values, y=bounds[1], line_color="rgba(0,0,0,0)",
+        showlegend=False
     )
 
     # Show plots
@@ -528,18 +544,57 @@ def make_visualizations(correls_df):
     })
 
 
+def get_shaded_area_bounds(all_data_df, to_fill):
+    """
+    :param all_data_df: pandas.DataFrame with a "Subjects" column and a
+    "Correlation" column, where both only have numeric values
+    :param to_fill: A string that is either "all" to shade the area between the
+    minimum and maximum correlations for each number of subjects in all_data_df
+    or "confidence_interval" to shade the area within a 95% confidence interval
+    of the correlations for each number of subjects in all_data_df
+    :return: A tuple of 2 pandas.Series objects where the first is the lower
+    boundary of the shaded area and the second is the upper boundary
+    """
+    if to_fill == "confidence_interval":
+        intervals = all_data_df.groupby(["Subjects"]).agg(
+            lambda x: get_confidence_interval(x))
+        intervals = pd.DataFrame(intervals["Correlation"].tolist(),
+                                 index=intervals.index)
+        result = (intervals[0], intervals[1])
+    elif to_fill == "all":
+        result = (all_data_df.groupby(["Subjects"]).agg(
+                      lambda x: x.quantile(0))["Correlation"],
+                  all_data_df.groupby(["Subjects"]).agg(
+                      lambda x: x.quantile(1))["Correlation"])
+    else:
+        raise ValueError("Invalid value for --fill parameter.")
+    return result
+
+
+def get_confidence_interval(series, confidence=0.95):
+    """
+    :param series: pandas.Series filled with numeric data
+    :param confidence: Percentage for confidence interval; default 95%
+    :return: Tuple representing series's confidence interval: (start, end)
+    """
+    mean = series.mean()
+    h = sem(series) * t.ppf((1 + confidence) / 2, len(series) - 1)
+    return mean - h, mean + h
+
+
 def get_plot_layout(y_min, y_max):
     """
-    Get the parameters for creating a pretty plot visualization. The parameters
-    are needed to determine the range of the x- and y-axes.
+    Return all format settings for creating a pretty plot visualization. This
+    function needs its parameters to determine the range of the y-axis.
     :param y_min: Lowest y-value to be displayed on the graph
+    :param y_max: Highest y-value to be displayed on the graph
     :return: Nested dictionary containing all needed plot attributes
     """
     title_font_size = 35
     font_size = 25
     black = "rgb(0, 0, 0)"
     white = "rgb(255, 255, 255)"
-    y_range_step = (y_max - y_min)/10
+    y_range_step = (y_max - y_min)/10  # Space buffer above y_max & below y_min
 
     def get_axis_layout(title, **kwargs):
         result = {
@@ -552,12 +607,8 @@ def get_plot_layout(y_min, y_max):
         return result
 
     return {
-        "title": {
-            "text": "Correlations Between Average Subsets",
-            "font": {"size": title_font_size},
-            "xanchor": "center",
-            "x": 0.5
-        },
+        "title": {"text": "Correlations Between Average Subsets", "x": 0.5,
+                  "font": {"size": title_font_size}, "xanchor": "center"},
         "paper_bgcolor": white,
         "plot_bgcolor": white,
         "legend": {"font": {"size": font_size}, "y": 0.4, "x": 0.5},
