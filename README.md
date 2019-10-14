@@ -30,9 +30,9 @@ Uses the same code as `automated_subset_analysis.py` to randomly generate subset
 
 ### Required Arguments
 
-1. `group_1_demo_file` is a path to a text file which contains only a list of paths (1 per line) to the .pconn files of all subjects in the first group to analyze a subset of.
+1. `group_1_demo_file` is a path to a text file which contains only a list of paths (1 per line) to the `.pconn` files of all subjects in the first group to analyze a subset of.
 
-1. `group_2_demo_file` is a path to a text file which contains only a list of paths (1 per line) to the .pconn files of all subjects in the second group to analyze a subset of.
+1. `group_2_demo_file` is a path to a text file which contains only a list of paths (1 per line) to the `.pconn` files of all subjects in the second group to analyze a subset of.
 
 Example of a basic call to this script:
 ```
@@ -51,11 +51,11 @@ python3 automated_subset_analysis.py /mnt/rose/shared/projects/ABCD/avg_pconn_ma
 
 1. `--n_analyses` takes one positive integer, the number of times to generate a pair of subsets and analyze them. For every integer given in the `--subset_size` list, this script will randomly generate `--n_analyses` subsets, creating `--subset_size` * `--n_analyses` subset `.csv` files in total.
 
-1. `--subset_size` takes one positive integer or a list of positive integers, the number of subjects to include in subsets. Include a list of whole numbers to generate subsets pairs of different sizes. By default, the subset sizes will be `[50, 100, 200, 300]`.
+1. `--subset_size` takes one positive integer or a list of positive integers, the number of subjects to include in subsets. Include a list of whole numbers to generate subsets pairs of different sizes. By default, the subset sizes will be `[50, 100, 200, 300]`. An example of entering a different list of sizes is `--subset_size 100 300 500 1000`.
 
 #### Flags to Skip Steps of Process
 
-1. `--only_make_graphs` takes either no parameters or one path to a readable `.csv` file as a parameter. Include this flag to import data from a `.csv` file instead of making a new one, just to make a graph visualization of already-existing data. If this flag is included, it must be a path to a readable `.csv` file with 2 columns: `Subjects` (the number of subjects in each subset) and `Correlation` (the correlation between each randomly generated subset in that pair). If the `.csv` was already made by this script, it will be called `correlations.csv`. 
+1. `--only_make_graphs` takes either no parameters or one path to a readable `.csv` file as a parameter. Include this flag to import data from a `.csv` file instead of making a new one. Given this flag, `automated_subset_analysis.py` just makes a graph visualization of already-existing data. If this flag is included, it must be a path to a readable `.csv` file with 2 columns: `Subjects` (the number of subjects in each subset) and `Correlation` (the correlation between each randomly generated subset in that pair). If the `.csv` was already made by this script, it will be called `correlations.csv`. 
 
 1. `--skip_subset_generation` takes either no parameters or one path to a readable directory as a parameter. Include this flag to calculate correlations and create the visualization using existing subsets instead of randomly generating new ones. By default, the subsets to use for calculating the correlations between average matrices and producing a visualization will be assumed to exist in the `--output` folder. To load subsets from a different folder, add the path to this flag as a parameter.
 
@@ -87,8 +87,8 @@ python3 automated_subset_analysis.py /mnt/rose/shared/projects/ABCD/avg_pconn_ma
 
 This script uses many of the same arguments as `automated_subset_analysis.py`, which work exactly the same way:
 
-- `--group_1_demo_file` 
-- `--group_2_demo_file`
+- `group_1_demo_file` 
+- `group_2_demo_file`
 - `--parent_path`
 - `--n_analyses`
 - `--subset_size`
@@ -106,7 +106,7 @@ And conversely, `euclidean_threshold_estimator.py` takes some optional arguments
 
 - `--max_rows` takes one positive integer, the maximum number of rows to display in the terminal when printing the contents of a Pandas object.
 
-- `--loops` takes one positive integer representing how many times to generate another subset before giving up on finding a subset which passes the chi-squared test and printing the frequency distribution of already-generated subsets. If this flag is excluded, then the script will keep generating subsets until one of them passes.
+- `--loops` takes one positive integer representing how many times to generate another subset before giving up on finding a subset which passes the chi-squared test and printing the frequency distribution of already-generated subsets. If this flag is excluded, then the script will keep generating subsets until one of them passes the chi-squared comparison.
 
 For more information, including the shorthand flags for each option, run this script with the `--help` command: `python3 euclidean_threshold_estimator.py --help`
 
@@ -138,11 +138,11 @@ Once all of the Euclidean distances are calculated, the script takes the maximum
 ```
 python3 euclidean_threshold_estimator.py --subset_size 100 200 300 400 500 1000 1500 2000 --exclude 10 --n_analyses 3
 ```
-The data and methods used to calculate that equation can be found in `euclidean_threshold_raw_data.txt` and `euclidean_threshold_estimation.ods`, which are both in the `automated_subset_analysis_files` subdirectory of this folder.  
+The data used to calculate that equation can be found in `euclidean_threshold_raw_data.txt` and `euclidean_threshold_estimation.ods`, which are both in the `automated_subset_analysis_files` subdirectory of this folder.  
 
 ## Meta
 
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Last Updated by Greg Conan, 2019-10-09
+- Last Updated by Greg Conan, 2019-10-14

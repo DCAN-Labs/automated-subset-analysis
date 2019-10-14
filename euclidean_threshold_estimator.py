@@ -4,7 +4,7 @@
 Euclidean distance threshold finder for subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-10-07
+Last Updated 2019-10-14
 """
 
 ##################################
@@ -12,7 +12,7 @@ Last Updated 2019-10-07
 # Script to randomly select pairs of subsets of data of a given size and get
 # the Euclidean distance threshold below which the subsets pass chi-square test
 # showing that each is not significantly different from the other's total
-# population
+# population, then get an equation to estimate that threshold given group size
 #
 ##################################
 
@@ -25,8 +25,6 @@ from scipy.spatial.distance import euclidean as euclidean_distances
 import subprocess
 
 # Constants
-CIFTI_CONN_WRAPPER = ("/mnt/max/shared/code/internal/utilities/"
-                      "cifti_conn_wrapper/cifti_conn_wrapper.py")
 DEFAULT_DEMO_TOTAL_FILE = "total_group_matching_stats.csv"
 DEFAULT_MINUTES_LIMIT = 10
 DEFAULT_N_ANALYSES = 1
@@ -254,16 +252,6 @@ def validate_whole_number(to_validate):
         )
 
 
-def make_template_name(filepath):
-    """
-    Given the path to a file, create the name of an average matrix of that file
-    :param filepath: Path to a file, as a string
-    :return: New template file name, as a string
-    """
-    return (os.path.basename(filepath).split(".")[0].decode("utf-8")
-            .join(("template_for_", ".pconn.nii")))
-
-
 def read_file_into_list(filepath):
     """
     Given the path to a file, read all of the file's lines as a list
@@ -454,5 +442,4 @@ def get_logarithmic_fit(x, y):
 
 
 if __name__ == '__main__':
-    # cProfile.run("main()")  # TODO remove this line (used for timing)
     main()

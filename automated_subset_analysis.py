@@ -22,8 +22,8 @@ import os
 import pandas as pd
 import plotly
 import psutil
-from scipy.stats import sem, t
 from scipy.spatial.distance import euclidean
+from scipy.stats import sem, t
 import subprocess
 
 # Constants
