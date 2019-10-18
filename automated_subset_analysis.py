@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-10-09
+Last Updated 2019-10-16
 """
 
 ##################################
@@ -21,16 +21,26 @@ import numpy as np
 import os
 import pandas as pd
 import plotly
-import psutil
+from pprint import pprint
+import psutil  # TODO: Test full script after removing this to see if it's unneeded
 from scipy.spatial.distance import euclidean
 from scipy.stats import sem, t
 import subprocess
 
 # Constants
+DEFAULT_AVG_GROUP_1 = ("/mnt/rose/shared/projects/ABCD/avg_pconn_maker/"
+                       "group1_10min_mean.pconn.nii")
+DEFAULT_AVG_GROUP_2 = ("/mnt/rose/shared/projects/ABCD/avg_pconn_maker/"
+                       "group2_10min_mean.pconn.nii")
 DEFAULT_DEMO_TOTAL_FILE = "total_group_matching_stats.csv"
 DEFAULT_FOLDER = "subset-analysis-output"
 DEFAULT_N_ANALYSES = 1
 DEFAULT_SUBSET_SIZE = [50, 100, 200, 300, 400, 500]
+VISUALIZATION_TITLES = {
+    "sub1_sub2": "Correlations Between Average Subsets",
+    "sub1_all2": "Group 1 Subset to Group 2 Correlation",
+    "sub2_all1": "Group 1 to Group 2 Subset Correlation"
+}
 PWD = os.getcwd()
 
 
@@ -45,14 +55,21 @@ def main():
     # If user said to skip the subset generation and use pre-existing subset
     # correlations, then make pd.DataFrame to visualize those
     if cli_args.only_make_graphs:
-        correls_df = pd.read_csv(cli_args.only_make_graphs)
-
+        for correls_csv in cli_args.only_make_graphs:
+            correls_df = pd.read_csv(correls_csv)
+            csv_sets_name = get_vis_name_from(correls_csv, list(
+                VISUALIZATION_TITLES.keys()))
+            csv_sets_name = (
+                VISUALIZATION_TITLES[csv_sets_name] if csv_sets_name in
+                VISUALIZATION_TITLES else "Correlations Between Unknown Groups"
+            )
+            make_visualizations(correls_df, cli_args.fill, cli_args.y_range,
+                                csv_sets_name)
     else:
 
         # If user said to skip subset generation but get correlations for pre-
         # existing subsets, then do that
-        if (hasattr(cli_args, "skip_subset_generation") and
-                cli_args.skip_subset_generation is not None):
+        if getattr(cli_args, "skip_subset_generation", None) is not None:
             all_subsets = []
             for subset_csv in os.listdir(cli_args.skip_subset_generation):
                 subset_df = pd.read_csv(os.path.join(
@@ -62,21 +79,35 @@ def main():
                         1: cli_args.group_1_demo[cli_args.group_1_demo[
                             "subjectkey"].isin(subset_df.pop("1").tolist())],
                         2: cli_args.group_2_demo[cli_args.group_2_demo[
-                            "subjectkey"].isin(subset_df.pop("2").tolist())]
+                            "subjectkey"].isin(subset_df.pop("2").tolist())],
+                        "subset_size": len(subset_df.index)
                     })
 
         # Otherwise (normal use case), generate and save all subsets and the
         # correlations between them
         else:
             all_subsets = save_and_get_all_subsets(cli_args)
-        correls_df = save_correlations_and_get_df(
-            get_correls_between_avg_subsets(all_subsets, cli_args), cli_args
-        )
-
-    make_visualizations(correls_df, cli_args.fill)
+        for correls_df_name, correls_df in get_correl_dataframes(
+                all_subsets, cli_args).items():
+            make_visualizations(correls_df, cli_args.fill, cli_args.y_range,
+                                VISUALIZATION_TITLES[correls_df_name])
 
     print("Started at " + started_at)
     print("Finished at " + subprocess.check_output("date").decode("utf-8"))
+
+
+def get_vis_name_from(file_name, vis_names):
+    """
+    :param file_name:
+    :param vis_names:
+    :return: Element of vis_names which is in the file_name string
+    """
+    found = None
+    while not found and len(vis_names) > 0:
+        next_vis_name = vis_names.pop()
+        if next_vis_name in file_name:
+            found = next_vis_name
+    return found
 
 
 def get_cli_args():
@@ -117,8 +148,8 @@ def get_cli_args():
         help=("Choose which data to shade in the visualization. Choose 'all' "
               "to shade in the area within the minimum and maximum "
               "correlations in the dataset. Choose 'confidence_interval' to "
-              "only shade in the 95% confidence interval of the data. By "
-              "default, this argument will be 'confidence_interval'.")
+              "only shade in the 95 percent confidence interval of the data. "
+              "By default, this argument will be 'confidence_interval'.")
     )
 
     # Optional: Import data from .csv files already created by this script
@@ -126,6 +157,7 @@ def get_cli_args():
     parser.add_argument(
         "-g",
         "--only_make_graphs",
+        nargs="+",
         type=validate_readable_file,
         help=("Include this flag to import data from a .csv file already made "
               "by this script instead of making a new one, just to make a "
@@ -134,6 +166,24 @@ def get_cli_args():
               "columns: 'Subjects' (the number of subjects in each subset) "
               "and 'Correlation' (the correlation between each randomly "
               "generated subset in that pair).")
+    )
+
+    # Optional: Path to average matrix .pconn file for group 1
+    parser.add_argument(
+        "--group_1_avg_file",
+        type=validate_readable_file,
+        default=DEFAULT_AVG_GROUP_1,
+        help=("Path to a .pconn file containing the average matrix for group "
+              "1. By default, this path will be " + DEFAULT_AVG_GROUP_1)
+    )
+
+    # Optional: Path to average matrix .pconn file for group 2
+    parser.add_argument(
+        "--group_2_avg_file",
+        type=validate_readable_file,
+        default=DEFAULT_AVG_GROUP_2,
+        help=("Path to a .pconn file containing the average matrix for group "
+              "2. By default, this path will be " + DEFAULT_AVG_GROUP_2)
     )
 
     # Optional: Number of subsets
@@ -170,7 +220,7 @@ def get_cli_args():
               "group_1_demo_file and group_2_demo_file.")
     )
 
-    # Optional: Subset size
+    # Optional: Number of subjects in each subset pair
     parser.add_argument(
         "-s",
         "--subset_size",
@@ -193,6 +243,19 @@ def get_cli_args():
               "ones. By default, the subsets to use will be assumed to exist "
               "in the --output folder. If you want to load subsets from "
               "a different folder, add the path to this flag as a parameter.")
+    )
+
+    # Optional: Custom data range for visualization
+    parser.add_argument(
+        "-y",
+        "--y_range",
+        nargs=2,
+        type=float,
+        help=("Range of y_axis in visualization. By default, this script will "
+              "automatically set the y-axis to show all of the correlation "
+              "values and nothing else. If this argument is used, then it "
+              "should be two floating-point numbers: the minimum and maximum "
+              "values to be shown on the visualizations' y-axes.")
     )
 
     # Optional: Do inverse Fisher-Z transformation (hyperbolic tangent) on data
@@ -227,6 +290,11 @@ def validate_cli_args(cli_args, parser):
             # Make directory to save matrices in
             os.makedirs(os.path.abspath(cli_args.output), exist_ok=True)
 
+            # Get path to .pconn parent directory
+            if not hasattr(cli_args, "parent_path"):
+                cli_args.parent_path = os.path.commonpath((
+                    cli_args.group_1_demo_file, cli_args.group_2_demo_file))
+
             # For each group, get the path to the directory with its .pconn
             # files, and the path to the file containing its demographic data
             for group_num in ("group_1_", "group_2_"):
@@ -236,10 +304,9 @@ def validate_cli_args(cli_args, parser):
                     getattr(cli_args, group_num + "demo_file"), na_values=" "
                 ).dropna(how="all", axis=1))
 
-            # Get path to .pconn parent directory
-            if not hasattr(cli_args, "parent_path"):
-                cli_args.parent_path = os.path.commonpath((
-                    cli_args.group_1_demo_file, cli_args.group_2_demo_file))
+                # Get average matrix for each group
+                setattr(cli_args, group_num + "avg", load_matrix_from_pconn(
+                    getattr(cli_args, group_num + "avg_file"), cli_args))
 
         return cli_args
 
@@ -289,9 +356,8 @@ def save_and_get_all_subsets(cli_args):
     all_subsets = []
 
     for subset_size in cli_args.subset_size:
-        print(" ".join((
-              "Generating", str(cli_args.n_analyses), "randomly selected",
-              "group(s) of", str(subset_size), "subjects.")))
+        print("Generating {} randomly selected group(s) of {} subjects."
+              .format(cli_args.n_analyses, subset_size))
 
         # Get average correlation from user-defined number of pairs of average
         # matrices of randomly generated subsets
@@ -307,28 +373,16 @@ def save_and_get_all_subsets(cli_args):
     return all_subsets
 
 
-def get_correls_between_avg_subsets(subset_list, cli_args):
+def get_correls_between(arr1, arr2, num_subjects):
     """
-    Get a pandas.DataFrame with the correlation between the average subsets of
-    each pair of subsets in subset_list
-    :param subset_list: List of dictionaries, each of which maps a subset's
-    group number to the subset for one pair of subsets
-    :param cli_args: argparse namespace with all command-line arguments
-    :return: pandas.DataFrame with one column for the number of subjects in
-    both subsets in a pair, and another column for the correlation between each
-    pair of subsets
+    :param arr1: np.ndarray with only numeric values
+    :param arr2: np.ndarray with only numeric values
+    :param num_subjects: Number of subjects to randomly select from each group
+    :return: Dictionary mapping "Subjects" to the number of rows in set1
+    and mapping "Correlation" to the correlation between both sets flattened
     """
-    n_vs_correls = []
-    for sub_pair in subset_list:
-        sub_len = len(sub_pair[1].index)
-        avg_subs = get_average_matrices_of_subsets(sub_pair, cli_args, sub_len)
-        n_vs_correls.append({
-            "Subjects": sub_len,
-            "Correlation": np.corrcoef(avg_subs[1].flatten(),
-                                       avg_subs[2].flatten())[0, 1]
-        })
-        print("All correlations:\n" + str(n_vs_correls))
-    return n_vs_correls
+    return {"Subjects": num_subjects,
+            "Correlation": np.corrcoef(arr1.flatten(), arr2.flatten())[0, 1]}
 
 
 def save_subsets(subs, output_dir, sub_num):
@@ -365,18 +419,18 @@ def randomly_select_subsets(cli_args, subset_size):
     :param subset_size: Number of subjects to randomly select from each group
     :return: A dictionary mapping group numbers to randomly selected subsets
     of size subset_size from those groups, where each subset is demographically
-    representative of the overall group as shown by chi square
+    representative of the overall group as shown by chi square. The dictionary
+    also includes the subset size.
     """
     # Iterate over both groups to get a subset of each
-    subsets = {1: None, 2: None}
+    subsets = {1: None, 2: None, "subset_size": subset_size}
     euclidean_threshold = get_est_euclid_chi_sq_threshold(subset_size)
     print("Estimated Euclidean distance threshold for chi-squared "
           "significance: " + str(euclidean_threshold))
-
     for group_num in subsets.keys():
         group_all = getattr(cli_args, str(group_num).join(("group_", "_demo")))
-        other_group = getattr(cli_args, {1: "2", 2: "1"}[group_num].join(
-            ("group_", "_demo")))
+        other_group = getattr(cli_args, "group_{}_demo".format(
+                              1 if group_num == 2 else 2))
 
         # Get information about group total dataframe for comparison
         columns = group_all.select_dtypes(include=["number"]).columns.values
@@ -403,8 +457,8 @@ def randomly_select_subsets(cli_args, subset_size):
                 eu_dist = euclidean(group_avgs, sub_avgs)
                 subset_matches_total = (eu_dist < euclidean_threshold)
             if subset_matches_total or loops % 100 == 0:
-                print(str(loops) + " subsets of group " + str(group_num)
-                      + " randomly generated.")
+                print("{} subsets of group {} randomly generated.".format(
+                      loops, group_num))
             if subset_matches_total:
                 print("Euclidean distance: " + str(eu_dist))
 
@@ -422,26 +476,18 @@ def get_est_euclid_chi_sq_threshold(subjects):
     return 19.0225676337-(4.6882289084*np.log(subjects/100))
 
 
-def get_average_matrices_of_subsets(subsets, cli_args, subset_size):
+def get_average_matrices_of_subsets(subsets, cli_args):
     """
     :param subsets: Dictionary mapping the group number to its pandas.DataFrame
     with a subjectkey column listing subject IDs
     :param cli_args: argparse namespace with all command-line arguments
-    :param subset_size: Number of subjects randomly selected from each group
     :return: Dictionary matching each group's number to its subset's average
     matrix from .pconn files of all its subjects
     """
     # Return value: Average matrices of group 1 and group 2
     average_matrices = {}
 
-    # Local function to import a subject's 2D data matrix from a .pconn file
-    def load_matrix_from_pconn(pconn):
-        """
-        :param pconn: Path to .pconn file of subject
-        :return: 2D matrix of data from the subject's .pconn
-        """
-        return np.array(nibabel.cifti2.load(os.path.join(
-            cli_args.parent_path, pconn)).get_data().tolist())
+    sub_size = subsets.pop("subset_size")
 
     # Local function to append a subject's 2D matrix to the subset's 3D matrix
     def add_pconn_to_3d_matrix(subject_pconn, full_matrix):
@@ -450,7 +496,7 @@ def get_average_matrices_of_subsets(subsets, cli_args, subset_size):
         :param full_matrix: 3D matrix to append the imported data matrix to
         :return: full_matrix, with subject's matrix added on the 3rd dimension
         """
-        matrix_to_add = load_matrix_from_pconn(subject_pconn)
+        matrix_to_add = load_matrix_from_pconn(subject_pconn, cli_args)
         if cli_args.inverse_fisher_z:
             matrix_to_add = np.tanh(matrix_to_add)
         return np.dstack((full_matrix, matrix_to_add))
@@ -461,7 +507,7 @@ def get_average_matrices_of_subsets(subsets, cli_args, subset_size):
 
         # Get one .pconn file to initialize 3D matrix
         subject_pconns = subset["pconn_10min"].iteritems()
-        first_pconn = load_matrix_from_pconn(next(subject_pconns)[1])
+        first_pconn = load_matrix_from_pconn(next(subject_pconns)[1], cli_args)
 
         # Initialize the 3D matrix from that .pconn file
         all_matrices = first_pconn.reshape((
@@ -469,11 +515,10 @@ def get_average_matrices_of_subsets(subsets, cli_args, subset_size):
         ))
 
         # Build the rest of the 3D matrix
-        for subject in subject_pconns:  # subset["pconn_10min"]:
+        for subject in subject_pconns:
             all_matrices = add_pconn_to_3d_matrix(subject[1], all_matrices)
-            print("Matrix size: " + str(all_matrices.shape) + ". Progress: "
-                  "{:.1%} finished".format(all_matrices.shape[2] /
-                                           subset_size))
+            print("Matrix size: {}. Progress: {:.1%} done.".format(
+                all_matrices.shape, all_matrices.shape[2] / sub_size))
 
         # Compute average matrix
         average_matrix = all_matrices.mean(axis=2)
@@ -483,29 +528,83 @@ def get_average_matrices_of_subsets(subsets, cli_args, subset_size):
     return average_matrices
 
 
-def save_correlations_and_get_df(correls_list, cli_args):
+def load_matrix_from_pconn(pconn, cli_args):
+    """
+    Import a subject's 2D data matrix from a .pconn file
+    :param pconn: Path to .pconn file of subject
+    :param cli_args: argparse namespace with all command-line arguments
+    :return: 2D matrix of data from the subject's .pconn
+    """
+    return np.array(nibabel.cifti2.load(os.path.join(
+                    cli_args.parent_path, pconn)).get_data().tolist())
+
+
+def get_correl_dataframes(all_subsets, cli_args):
+    """
+    :param all_subsets: List of dictionaries, each of which maps both group
+    numbers to a randomly selected subset of that group
+    :param cli_args: argparse namespace with all command-line arguments
+    :return: Dictionary of 3 string:pandas.DataFrame pairs such that each
+    DataFrame has a column of subset sizes and a column of correlations:
+       {sub1_sub2: Correlations between the average matrices of both subsets
+        sub1_all2: Correls between group 1 subset avg matrix and group 2 total
+        sub2_all1: Correls between group 2 subset avg matrix and group 1 total}
+    """
+    # Return value: Dict of correlation lists to become pandas.DataFrames
+    result = {"sub1_sub2": [], "sub1_all2": [], "sub2_all1": []}
+
+    # Get each pair of average matrices, their correlation with each other, and
+    # each one's correlation with the other group's average matrix
+    for sub_pair in all_subsets:
+        sub1_avg, sub2_avg = get_average_matrices_of_subsets(
+            sub_pair.copy(), cli_args).values()
+        subset_size = sub_pair.pop("subset_size")
+        print("subset_size: " + str(subset_size))
+
+        result["sub1_sub2"].append(get_correls_between(sub1_avg, sub2_avg,
+                                                       subset_size))
+        result["sub1_all2"].append(get_correls_between(cli_args.group_2_avg,
+                                                       sub1_avg, subset_size))
+        result["sub2_all1"].append(get_correls_between(cli_args.group_1_avg,
+                                                       sub2_avg, subset_size))
+        pprint("\nCorrelations between average matrices of ".join((
+            "", "both subsets:\n" + str(result["sub1_sub2"]),
+            "subset 1 and group 2:\n" + str(result["sub1_all2"]),
+            "subset 2 and group 1:\n" + str(result["sub2_all1"])
+        )))
+
+    return {name: save_correlations_and_get_df(
+            correls, cli_args, "correlations_{}.csv".format(name))
+            for name, correls in result.items()}
+
+
+def save_correlations_and_get_df(correls_list, cli_args, correl_file):
     """
     Save correlations to .csv file
     :param correls_list: List of dictionaries where each dictionary contains
     "Subjects" and "Correlation" as a key with a numerical value
     :param cli_args: argparse namespace with all command-line arguments
-    :return: N/A
+    :param correl_file: Name of the file to save correlations into
+    :return: pandas.DataFrame with a header row ("Subjects", "Correlation"),
+    subset sizes in one column, and correlations in its second column
     """
-    # Save correlations to .csv file
-    print("Correlations:\n" + str(correls_list))
     n_vs_correls_df = pd.DataFrame(correls_list, columns=[
         "Subjects", "Correlation"])
-    n_vs_correls_df.to_csv(os.path.join(cli_args.output, "correlations.csv"),
+    n_vs_correls_df.to_csv(os.path.join(cli_args.output, correl_file),
                            index=False)
     return n_vs_correls_df
 
 
-def make_visualizations(correls_df, fill_area):
+def make_visualizations(correls_df, fill_area, y_range, vis_title):
     """
     Create a graph visualization from correlation data
     :param correls_df: pandas.DataFrame with one column titled "Subjects" and
     another titled "Correlations" where both have numeric values
     :param fill_area: A string that is either "all" or "confidence_interval"
+    :param y_range: None if the y-axis values range will be automatically
+    calculated based on the data, or a tuple of 2 floats if the user entered a
+    custom y-axis range.
+    :param vis_title: Title of visualization to create
     :return: N/A
     """
     # Make scatter plot mapping subset size to pairwise correlations
@@ -517,7 +616,7 @@ def make_visualizations(correls_df, fill_area):
     # Add average lines to plot using averages of each subset size
     averages = correls_df.groupby(["Subjects"]).agg(
         lambda x: x.unique().sum()/x.nunique())
-    print("Averages:\n" + str(averages))
+    print("Average correlations for {}:\n{}".format(vis_title, averages))
     avgs_plot = plotly.graph_objs.Scatter(
         x=averages.index.values, y=averages["Correlation"], mode="lines",
         name="Average correlations")
@@ -537,11 +636,15 @@ def make_visualizations(correls_df, fill_area):
         showlegend=False
     )
 
-    # Show plots
+    # Show plots, either using custom y-axis range or calculating a range
+    if y_range:
+        y_axis_min, y_axis_max = y_range
+    else:
+        y_axis_min = correls_df["Correlation"].min()
+        y_axis_max = correls_df["Correlation"].max()
     plotly.io.show({
         "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
-        "layout": get_plot_layout(correls_df["Correlation"].min(),
-                                  correls_df["Correlation"].max())
+        "layout": get_plot_layout(y_axis_min, y_axis_max, vis_title)
     })
 
 
@@ -583,12 +686,13 @@ def get_confidence_interval(series, confidence=0.95):
     return mean - h, mean + h
 
 
-def get_plot_layout(y_min, y_max):
+def get_plot_layout(y_min, y_max, graph_title):
     """
     Return all format settings for creating a pretty plot visualization. This
     function needs its parameters to determine the range of the y-axis.
     :param y_min: Lowest y-value to be displayed on the graph
     :param y_max: Highest y-value to be displayed on the graph
+    :param graph_title: String of text to be displayed at the top of the graph
     :return: Nested dictionary containing all needed plot attributes
     """
     title_font_size = 35
@@ -608,8 +712,8 @@ def get_plot_layout(y_min, y_max):
         return result
 
     return {
-        "title": {"text": "Correlations Between Average Subsets", "x": 0.5,
-                  "font": {"size": title_font_size}, "xanchor": "center"},
+        "title": {"text": graph_title, "x": 0.5, "xanchor": "center",
+                  "font": {"size": title_font_size}},
         "paper_bgcolor": white,
         "plot_bgcolor": white,
         "legend": {"font": {"size": font_size}, "y": 0.4, "x": 0.5},
