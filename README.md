@@ -145,4 +145,4 @@ The data used to calculate that equation can be found in `euclidean_threshold_ra
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Last Updated by Greg Conan, 2019-10-14
+- Last Updated by Greg Conan, 2019-10-18
