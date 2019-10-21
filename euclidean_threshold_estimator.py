@@ -1,10 +1,10 @@
 #! /usr/bin/env python3
 
 """
-Euclidean distance threshold finder for subset analysis
+Euclidean distance threshold finder for automated_subset_analysis.py
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-10-14
+Last Updated 2019-10-21
 """
 
 ##################################
@@ -21,7 +21,7 @@ import numpy as np
 import os
 import pandas as pd
 from scipy import stats
-from scipy.spatial.distance import euclidean as euclidean_distances
+from scipy.spatial.distance import euclidean
 import subprocess
 
 # Constants
@@ -324,7 +324,7 @@ def randomly_select_subsets(cli_args, subset_size):
                 loop_cond = chi_square_difference(
                     other_group, subsets[group_num], columns
                 )
-                eu_dist = euclidean_distances(group_avgs, sub_avgs)
+                eu_dist = euclidean(group_avgs, sub_avgs)
                 eu_distances.append(eu_dist)
                 if loop_cond:
                     print("Euclidean distance=" + str(round(eu_dist)))
@@ -438,7 +438,7 @@ def get_logarithmic_fit(x, y):
     :return: The logarithmic best-fit curve equation for x and y, as a string
     """
     coefs = np.polyfit(np.log(x), y, 1)
-    return " + ".join((str(coefs[1]), str(coefs[0]) + " * ln(x)"))
+    return "{} * ln(x) + {}".format(coefs[0], coefs[1])
 
 
 if __name__ == '__main__':
