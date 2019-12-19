@@ -1,0 +1,35 @@
+Input:
+```
+python3 ./src/euclidean_threshold_estimator.py ./raw/ABCD_2.0_group1_data_10minpconns.csv ./raw/ABCD_2.0_group2_data_10minpconns.csv --subset-size 1300 1200 1100 1000 900 800 700 600 500 400 300 200 100 90 80 70 60 50 --n-analyses 10
+```
+
+Output:
+```
+All maximum Euclidean distances:
+Group  Subjects  Euclidean Distance
+    1      1300            0.513405
+    1      1200            0.573807
+    1      1100            0.587873
+    1      1000            0.647698
+    2       900            0.690227
+    1       800            0.856862
+    2       700            0.678862
+    2       600            0.749491
+    1       500            0.853242
+    1       400            0.948900
+    1       300            0.875619
+    2       200            1.470313
+    1       100            1.528245
+    1        90            1.640221
+    1        80            1.412850
+    1        70            1.978475
+    2        60            2.409005
+    2        50            1.738935
+
+Logarithmic best-fit equation: -0.44897407617376806 * ln(x) + 3.7026679337563486
+Correlation between the expected values from the best-fit equation and the subsets' max Euclidean distances: 0.9385991485014806
+
+./src/euclidean_threshold_estimator.py started at 12:37:20 on Dec 06, 2019.
+
+./src/euclidean_threshold_estimator.py finished at 13:31:19 on Dec 06, 2019.
+```

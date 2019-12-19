@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-10-21
+Last Updated 2019-12-17
 """
 
 ##################################
@@ -15,317 +15,77 @@ Last Updated 2019-10-21
 #
 ##################################
 
+# Imports
 import argparse
-import nibabel
+from src.conan_tools import *
 import numpy as np
 import os
 import pandas as pd
 import plotly
-from pprint import pformat
-from scipy.spatial.distance import euclidean
-from scipy.stats import sem, t
-import subprocess
+import pprint
+import re
 import sys
 
 # Constants
-DEFAULT_AVG_GROUP_1 = ("/mnt/rose/shared/projects/ABCD/avg_pconn_maker/"
-                       "group1_10min_mean.pconn.nii")
-DEFAULT_AVG_GROUP_2 = ("/mnt/rose/shared/projects/ABCD/avg_pconn_maker/"
-                       "group2_10min_mean.pconn.nii")
-DEFAULT_DEMO_TOTAL_FILE = "total_group_matching_stats.csv"
-DEFAULT_FOLDER = "subset-analysis-output"
-DEFAULT_N_ANALYSES = 1
-DEFAULT_SUBSET_SIZE = [50, 100, 200, 300, 400, 500]
+DEFAULT_DEM_VAR_MATR = "matrix_file"
+DEFAULT_DEM_VAR_PCONNS = "pconn10min"
+DEFAULT_DEM_VAR_SUBJID = "id_redcap"
+PWD = get_pwd()
 VISUALIZATION_TITLES = {
     "sub1_sub2": "Correlations Between Average Subsets",
     "sub1_all2": "Group 1 Subset to Group 2 Correlation",
     "sub2_all1": "Group 1 to Group 2 Subset Correlation"
 }
-PWD = os.getcwd()
-
-""" Outline of functions in this script
-main
-    get_cli_args
-        validate_readable_file
-        validate_whole_number
-        validate_cli_args
-            load_matrix_from_pconn
-    only_make_graphs
-        chdir_to
-        get_vis_name_from
-    skip_subset_generation
-    save_and_get_all_subsets
-        randomly_select_subsets
-            get_est_euclid_chi_sq_threshold
-        save_subsets
-    get_correl_dataframes
-        get_average_matrices_of_subsets
-        get_correls_between
-        save_correlations_and_get_df
-    class HiddenPrints (for make_visualization)
-    make_visualization
-        get_shaded_area_bounds
-            get_confidence_interval
-        get_plot_layout
-"""
 
 
 def main():
 
-    # Get and validate all command-line arguments from user
-    cli_args = get_cli_args()
+    # Store and print the date and time when this script started running
+    starting_timestamp = get_and_print_timestamp_when(sys.argv[0], "started")
 
-    started_at = subprocess.check_output("date").decode("utf-8")
-    print("Started at " + started_at)
+    # Get and validate all command-line arguments from user
+    cli_args = get_cli_args(
+        ("Script to randomly select pairs of subsets of data of given sizes, "
+         "find the correlation between the average matrices of each subset, "
+         "and plot all of those correlations for each subset size."),
+        get_ASA_arg_names(), PWD, validate_cli_args
+    )
 
     # If user said to skip the subset generation and use pre-existing subset
     # correlations, then make pd.DataFrame to visualize those
     if cli_args.only_make_graphs:
         only_make_graphs(cli_args)
     else:
+        try:
+            # Generate and save all subsets and their intercorrelations, unless
+            # user said to skip subset generation and get correlations of pre-
+            # existing subsets
+            get_subs = (skip_subset_generation
+                        if getattr(cli_args, "skip_subset_generation", None)
+                        else save_and_get_all_subsets)
+            all_subsets = get_subs(cli_args, "subset_{}_with_{}_subjects.csv")
 
-        # If user said to skip subset generation but get correlations for pre-
-        # existing subsets, then do that
-        if getattr(cli_args, "skip_subset_generation", None) is not None:
-            all_subsets = skip_subset_generation(cli_args)
+            # Move to output directory and then make visualizations of
+            # all subset correlations
+            chdir_to(cli_args.output)
+            for correls_df_name, correls_df in get_correl_dataframes(
+                    all_subsets, cli_args).items():
+                make_visualization(correls_df, VISUALIZATION_TITLES[
+                                   correls_df_name], cli_args)
 
-        # Otherwise (normal use case), generate and save all subsets and the
-        # correlations between them
-        else:
-            all_subsets = save_and_get_all_subsets(cli_args)
+        except Exception as e:
+            get_and_print_timestamp_when(sys.argv[0], "crashed")
+            raise e
 
-        # Move to output directory and then make visualizations of all subset
-        # correlations
-        chdir_to(cli_args.output)
-        for correls_df_name, correls_df in get_correl_dataframes(
-                all_subsets, cli_args).items():
-            make_visualization(correls_df, VISUALIZATION_TITLES[
-                               correls_df_name], cli_args)
-
-    print("Started at " + started_at)
-    print("Finished at " + subprocess.check_output("date").decode("utf-8"))
-
-
-def get_cli_args():
-    """
-    Get and validate all args from command line using argparse.
-    :return: Namespace containing all validated inputted command line arguments
-    """
-    # Create arg parser
-    parser = argparse.ArgumentParser(
-        description=("Script to randomly select pairs of subsets of data of "
-                     "given sizes, find the correlation between the average "
-                     "matrices of each subset, and plot all of those "
-                     "correlations for each subset size.")
-    )
-
-    # Required: Full list of group 1 demographic data
-    parser.add_argument(
-        "group_1_demo_file",
-        type=validate_readable_file,
-        help=("Path to a .csv file containing all demographic information "
-              "about the subjects in group 1.")
-    )
-
-    # Required: Full list of group 2 demographic data
-    parser.add_argument(
-        "group_2_demo_file",
-        type=validate_readable_file,
-        help=("Path to a .csv file containing all demographic information "
-              "about the subjects in group 2.")
-    )
-
-    # Optional: Font size of axis text in visualization
-    default_axis_text_size = 30
-    parser.add_argument(
-        "-a",
-        "--axis_font_size",
-        default=default_axis_text_size,
-        type=validate_whole_number,
-        help=("Font size of axis text in visualization. Enter a positive "
-              "integer for this argument. If it is excluded, then by default, "
-              "the font size will be {}.".format(default_axis_text_size))
-    )
-
-    # Optional: Choose what to fill in the visualization
-    parser.add_argument(
-        "-f",
-        "--fill",
-        choices=["confidence_interval", "all"],
-        default="confidence_interval",
-        help=("Choose which data to shade in the visualization. Choose 'all' "
-              "to shade in the area within the minimum and maximum "
-              "correlations in the dataset. Choose 'confidence_interval' to "
-              "only shade in the 95 percent confidence interval of the data. "
-              "By default, this argument will be 'confidence_interval'.")
-    )
-
-    # Optional: Import data from .csv files already created by this script
-    # instead of creating new ones
-    parser.add_argument(
-        "-g",
-        "--only_make_graphs",
-        nargs="+",
-        type=validate_readable_file,
-        help=("Include this flag to import data from a .csv file already made "
-              "by this script instead of making a new one, just to make a "
-              "graph visualization of already-existing data. If this flag "
-              "is included, it must be a path to a readable .csv file with 2 "
-              "columns: 'Subjects' (the number of subjects in each subset) "
-              "and 'Correlation' (the correlation between each randomly "
-              "generated subset in that pair).")
-    )
-
-    # Optional: Path to average matrix .pconn file for group 1
-    parser.add_argument(
-        "--group_1_avg_file",
-        type=validate_readable_file,
-        default=DEFAULT_AVG_GROUP_1,
-        help=("Path to a .pconn file containing the average matrix for group "
-              "1. By default, this path will be " + DEFAULT_AVG_GROUP_1)
-    )
-
-    # Optional: Path to average matrix .pconn file for group 2
-    parser.add_argument(
-        "--group_2_avg_file",
-        type=validate_readable_file,
-        default=DEFAULT_AVG_GROUP_2,
-        help=("Path to a .pconn file containing the average matrix for group "
-              "2. By default, this path will be " + DEFAULT_AVG_GROUP_2)
-    )
-
-    # Optional: Number of subsets
-    parser.add_argument(
-        "-n",
-        "--n_analyses",
-        default=DEFAULT_N_ANALYSES,
-        type=validate_whole_number,
-        help="Number of times to generate a pair of subsets and analyze them."
-    )
-
-    # Optional: Output folder
-    parser.add_argument(
-        "-o",
-        "--output",
-        default=os.path.join(PWD, DEFAULT_FOLDER),
-        help=("Path to folder to save subset data in. The default folder is "
-              + DEFAULT_FOLDER)
-    )
-
-    # Optional: Path to parent directory of folders with .pconn files
-    parser.add_argument(
-        "-p"
-        "--parent_path",
-        type=validate_readable_file,
-        help=("Path to parent directory containing .pconn files. The "
-              "group_1_demo_file and the group_2_demo_file should both have "
-              "a column named 'pconn_10min' where each row has a path to the "
-              ".pconn file for the subject in that row. That path should be "
-              "a relative path from the parent_path directory, the value "
-              "given as this argument. So, parent_path must be a valid path "
-              "to a readable directory. By default, if this flag is excluded, "
-              "then parent_path will be the parent directory of "
-              "group_1_demo_file and group_2_demo_file.")
-    )
-
-    # Optional: Number of subjects in each subset pair
-    parser.add_argument(
-        "-s",
-        "--subset_size",
-        nargs="+",
-        default=DEFAULT_SUBSET_SIZE,
-        type=validate_whole_number,
-        help=("Number of subjects to include in subsets. Include a list of "
-              "whole numbers to generate subsets pairs of different sizes. By "
-              "default, the subset sizes will be {}.".format(
-               DEFAULT_SUBSET_SIZE))
-    )
-
-    # Optional: Font size of title text in visualization
-    default_title_size = 40
-    parser.add_argument(
-        "-t",
-        "--title_font_size",
-        default=default_title_size,
-        type=validate_whole_number,
-        help=("Font size of title text in visualization. Enter a positive "
-              "integer for this argument. If it is excluded, then the default "
-              "title font size will be {}.".format(default_title_size))
-    )
-
-    # Optional: Make averages/correlations from existing subsets
-    parser.add_argument(
-        "-u",
-        "--skip_subset_generation",
-        nargs="?",
-        const="output",
-        help=("Include this flag to calculate correlations and create the "
-              "visualization using existing subsets instead of making new "
-              "ones. By default, the subsets to use will be assumed to exist "
-              "in the --output folder. If you want to load subsets from "
-              "a different folder, add the path to this flag as a parameter.")
-    )
-
-    # Optional: Custom data range for visualization
-    parser.add_argument(
-        "-y",
-        "--y_range",
-        nargs=2,
-        type=float,
-        metavar=("Y_MIN", "Y_MAX"),
-        help=("Range of y_axis in visualization. By default, this script will "
-              "automatically set the y-axis bounds to show all of the "
-              "correlation values and nothing else. If this argument is used, "
-              "then it should be two floating-point numbers: the minimum and "
-              "maximum values to be shown on the visualizations' y-axes.")
-    )
-
-    # Optional: Do inverse Fisher-Z transformation (hyperbolic tangent) on data
-    parser.add_argument(
-        "-z",
-        "--inverse_fisher_z",
-        action="store_true",
-        help=("Do inverse Fisher-Z transform on the matrices imported from "
-              "the .pconn files of the data before getting correlations.")
-    )
-
-    return validate_cli_args(parser.parse_args(), parser)
-
-
-def validate_readable_file(path):
-    """
-    Throw exception unless parameter is a valid readable filename string. This
-    is used instead of argparse.FileType("r") because the latter leaves an open
-    file handle, which has caused problems.
-    :param path: Parameter to check if it represents a valid filename
-    :return: String representing a valid filename
-    """
-    try:
-        assert os.access(path, os.R_OK)
-        return path if os.path.isabs(path) else os.path.abspath(path)
-    except (AssertionError, OSError, TypeError):
-        argparse.ArgumentTypeError("Cannot read file at " + path)
-
-
-def validate_whole_number(to_validate):
-    """
-    Throw argparse exception unless to_validate is a positive integer
-    :param to_validate: Object to test whether it is a positive integer
-    :return: to_validate if it is a positive integer
-    """
-    try:
-        to_validate = int(to_validate)
-        assert to_validate > 0
-        return to_validate
-    except (AssertionError, TypeError):
-        raise argparse.ArgumentTypeError(
-            str(to_validate) + " is not a positive integer.")
+    # Print the date and time when this script started and finished running
+    print(starting_timestamp)
+    get_and_print_timestamp_when(sys.argv[0], "finished")
 
 
 def validate_cli_args(cli_args, parser):
     """
     Check that all command line arguments will allow this script to work.
-    :param cli_args: argparse namespace with all command-line arguments
+    :param cli_args: argparse namespace with all given command-line arguments
     :param parser: argparse ArgumentParser to raise error if anything's invalid
     :return: Validated command-line arguments argparse namespace
     """
@@ -337,68 +97,87 @@ def validate_cli_args(cli_args, parser):
                 if os.path.isdir(correl_file):
                     parser.error(correl_file + " is a directory, not a file. "
                                  "Please enter the name of a readable file as "
-                                 "the --only_make_graphs argument.")
+                                 "the --only-make-graphs argument.")
         else:
             # If user said to get correlations from existing subsets, get the
             # path to the directory to save correlations in
-            if (hasattr(cli_args, "skip_subset_generation") and
-                    cli_args.skip_subset_generation is not None):
-                if cli_args.skip_subset_generation == "output":
-                    cli_args.skip_subset_generation = cli_args.output
-                else:
-                    validate_readable_file(cli_args.skip_subset_generation)
-
-            # Make directory to save matrices in
-            os.makedirs(os.path.abspath(cli_args.output), exist_ok=True)
-
-            # Get path to .pconn parent directory
-            if not hasattr(cli_args, "parent_path"):
-                cli_args.parent_path = os.path.commonpath((
-                    cli_args.group_1_demo_file, cli_args.group_2_demo_file))
+            path_skip_sub = getattr(cli_args, "skip_subset_generation", None)
+            if path_skip_sub == "output":
+                cli_args.skip_subset_generation = cli_args.output
+            elif path_skip_sub:
+                valid_readable_file(path_skip_sub)  # Raise error unless valid
 
             # For each group, get the path to the directory with its .pconn
             # files, and the path to the file containing its demographic data
-            for group_num in ("group_1_", "group_2_"):
-
-                # Import all of this group's demographics; drop empty columns
-                setattr(cli_args, group_num + "demo", pd.read_csv(
-                    getattr(cli_args, group_num + "demo_file"), na_values=" "
-                ).dropna(how="all", axis=1))
-
-                # Get average matrix for each group
-                setattr(cli_args, group_num + "avg", load_matrix_from_pconn(
-                    getattr(cli_args, group_num + "avg_file"), cli_args))
-
+            cli_args = add_pconn_paths_to(cli_args, [1, 2], parser)
         return cli_args
-
     except OSError as e:
         parser.error(str(e))
 
 
-def load_matrix_from_pconn(pconn, cli_args):
+def add_pconn_paths_to(cli_args, group_nums, parser):
     """
-    Import a subject's 2D data matrix from a .pconn file
-    :param pconn: String representing the path to .pconn file of subject
-    :param cli_args: argparse namespace with all command-line arguments
-    :return: 2D matrix of data from the subject's .pconn
+    Get necessary paths to .pconn.nii files and add them to the cli_args object
+    :param cli_args: argparse namespace with most needed command-line arguments
+    :param group_nums: List of whole numbers; each element is a group number
+    :param parser: argparse ArgumentParser to raise error if anything's invalid
+    :return: cli_args, but with all needed arguments
     """
-    return np.array(nibabel.cifti2.load(os.path.join(
-                    cli_args.parent_path, pconn)).get_data().tolist())
+    for gp_num in group_nums:
 
+        # Import all of this group's demographics; drop empty columns
+        group_demo_str = "group_{}_demo".format(gp_num)
+        demographics = get_group_demographics(cli_args, gp_num,
+                                              group_demo_str + "_file", parser)
+
+        # Add paths to matrices if the user gave paths in separate .conc file
+        matr_conc = getattr(cli_args, "matrices_conc_{}".format(gp_num), None)
+        setattr(cli_args, group_demo_str, demographics if not matr_conc else
+                replace_paths_column(demographics, matr_conc))
+
+        # Get average matrix for each group
+        group_avg_file_str = "group_{}_avg_file".format(gp_num)
+        cli_args = add_default_avg_matr_path_to(cli_args, gp_num)
+        valid_readable_file(getattr(cli_args, group_avg_file_str))
+        setattr(cli_args, "group_{}_avg".format(gp_num),
+                load_matrix_from(getattr(cli_args, group_avg_file_str)))
+
+    return cli_args
+
+
+def replace_paths_column(demographics, matr_conc):
+    """
+    :param demographics: pandas.DataFrame with demographic information,
+                         including 0 or 1 column(s) with paths to matrix files
+    :param matr_conc: String which is a valid path to a .conc file with paths
+                      to matrix files
+    :return: demographics, but replacing its previous paths column with the
+             contents of the matr_conc file
+    """
+    matrix_paths = pd.read_csv(matr_conc, converters={
+        0: rename_exacloud_path
+    }, sep="\n", header=None).rename(columns=lambda x: DEFAULT_DEM_VAR_MATR)
+    matrix_paths[DEFAULT_DEM_VAR_SUBJID] = matrix_paths.apply(lambda x: (
+        extract_subject_id_from(x.loc[DEFAULT_DEM_VAR_MATR])
+    ), axis="columns")
+    if DEFAULT_DEM_VAR_PCONNS in demographics:
+        demographics = demographics.drop(DEFAULT_DEM_VAR_PCONNS, axis="columns")
+    return demographics.merge(matrix_paths, on=DEFAULT_DEM_VAR_SUBJID)
+    
 
 def only_make_graphs(cli_args):
     """
-    If user said to skip subset generation and skip correlation calculation,
+    If user said to, skip subset generation and skip correlation calculation,
     then make visualizations from already-existing correlation files
     :param cli_args: argparse namespace with all command-line arguments. This
-    function uses the --output and --only_make_graphs arguments. It also passes
-    cli_args to the make_visualization function.
+                     function uses the --output and --only_make_graphs 
+                     arguments, and passes cli_args to make_visualization.
     :return: N/A
     """
     chdir_to(cli_args.output)
     for correls_csv in cli_args.only_make_graphs:
         correls_df = pd.read_csv(correls_csv)
-        csv_sets_name = get_vis_name_from(correls_csv, list(
+        csv_sets_name = get_which_str_in_filename(correls_csv, list(
             VISUALIZATION_TITLES.keys()))
         csv_sets_name = (
             VISUALIZATION_TITLES[csv_sets_name] if csv_sets_name in
@@ -407,283 +186,283 @@ def only_make_graphs(cli_args):
         make_visualization(correls_df, csv_sets_name, cli_args)
 
 
-def chdir_to(folder):
-    """
-    Change directory to dir unless it is already the current working directory
-    :param folder: String that is a valid path to the directory to chdir to
-    :return: N/A
-    """
-    abs_dir = os.path.abspath(folder)
-    if os.path.abspath(os.getcwd()) != abs_dir:
-        os.chdir(abs_dir)
-
-
-def get_vis_name_from(file_name, vis_names):
-    """
-    :param file_name: String that is the name of a readable file
-    :param vis_names: List of names which might be in file_name
-    :return: Element of vis_names which is in the file_name string
-    """
-    found = None
-    while not found and len(vis_names) > 0:
-        next_vis_name = vis_names.pop()
-        if next_vis_name in file_name:
-            found = next_vis_name
-    return found
-
-
-def skip_subset_generation(cli_args):
+def skip_subset_generation(cli_args, subsets_file_name):
     """
     Get all subsets that have already been generated if user skipped subset
-    generation on this run of the script
+    generation on this run. If no subset files exist, then terminate the script
     :param cli_args: argparse namespace with all command-line arguments. This
-    function uses the --group_1_demo, --group_2_demo, and
-    --skip_subset_generation arguments.
+                     function uses the --group_1_demo, --group_2_demo, and
+                     --skip_subset_generation arguments.
+    :param subsets_file_name: String with the format of subset file names
     :return: List of dictionaries where each has two elements mapping a group
-    number to a subset of that group, and also has an element mapping the
-    string "subset_size" to the number of subjects in both subsets
+             number to a subset of that group, and also has an element mapping 
+             the string "subset_size" to the number of subjects in both subsets
     """
-    all_subsets = []
-    for subset_csv in os.listdir(cli_args.skip_subset_generation):
-        subset_df = pd.read_csv(os.path.join(
-            cli_args.skip_subset_generation, subset_csv))
-        if "1" in subset_df and "2" in subset_df:
-            all_subsets.append({
-                1: cli_args.group_1_demo[cli_args.group_1_demo[
-                    "subjectkey"].isin(subset_df.pop("1").tolist())],
-                2: cli_args.group_2_demo[cli_args.group_2_demo[
-                    "subjectkey"].isin(subset_df.pop("2").tolist())],
-                "subset_size": len(subset_df.index)
-            })
-    return all_subsets
+    sub_id_col = DEFAULT_DEM_VAR_SUBJID # TODO make this a cli_args input argument?
 
-
-def save_and_get_all_subsets(cli_args):
-    """
-    Randomly generate all pairs of subsets, save each of them to a .csv file,
-    and then return a pandas.DataFrame with the correlation between each pair
-    :param cli_args: argparse namespace with all command-line arguments. This
-    function uses the --n_analyses, --output, and --subset_size arguments. It
-    also passes cli_args to the randomly_select_subsets function.
-    :return: List of dictionaries, each of which maps a subset's group number
-    to the subset for one pair of subsets
-    """
     # Return value: List of subsets
     all_subsets = []
 
-    for subset_size in cli_args.subset_size:
-        print("Generating {} randomly selected group(s) of {} subjects."
-              .format(cli_args.n_analyses, subset_size))
+    # Get every subset based on cli_args, excluding other files in the same dir
+    subset_name_parts = subsets_file_name.split("{}")
+    for file_name in os.listdir(cli_args.skip_subset_generation):
+        subset_csv = os.path.join(cli_args.skip_subset_generation, file_name)
+        if is_subset_csv(subset_csv, subset_name_parts, cli_args.n_analyses):
 
-        # Get average correlation from user-defined number of pairs of average
-        # matrices of randomly generated subsets
-        for i in range(cli_args.n_analyses):
-
-            # Select subsets and make average matrices from .pconns for each
-            subsets = randomly_select_subsets(cli_args, subset_size)
-
-            # Save randomly generated subsets to .csv files
-            save_subsets(subsets, cli_args.output, i)
-
-            all_subsets.append(subsets)
+            # Read subset from file into pandas.DataFrame 
+            subset_df = pd.read_csv(subset_csv)
+            if ("1" in subset_df and "2" in subset_df 
+                    and len(subset_df.index) in cli_args.subset_size):
+                all_subsets.append({
+                    1: cli_args.group_1_demo[cli_args.group_1_demo[
+                        sub_id_col].isin(subset_df.pop("1").tolist())],
+                    2: cli_args.group_2_demo[cli_args.group_2_demo[
+                        sub_id_col].isin(subset_df.pop("2").tolist())],
+                    "subset_size": len(subset_df.index)
+                })
+    if len(all_subsets) == 0:
+        raise FileNotFoundError("No subsets found at {}"
+                                .format(cli_args.skip_subset_generation))
     return all_subsets
 
 
-def randomly_select_subsets(cli_args, subset_size):
+def is_subset_csv(path, subset_filename_parts, n_analyses):
     """
+    Check if a path points to a subset .csv file made by this script within the
+    --n_analyses variable
+    :param path: String which should be a valid path to a readable file
+    :param subsets_filename_parts: List of strings which each have part of the
+                                   format of subset file names
+    :param n_analyses: Integer which is the --n_analyses argument value
+    :return: True if path is to a readable .csv file following this script's 
+             subset file naming conventions, where the analysis number <= 
+             n_analyses, with two columns labeled '1' and '2'; otherwise False
+    """
+    try:
+        path = valid_readable_file(path)
+        if os.path.splitext(path)[1] == ".csv":
+            with open(path, "r") as infile:
+                row_1 = infile.readline().strip().split(",")
+            name = os.path.basename(path)
+            match = re.search(r"(\d+)", name)
+            result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
+                      and all(part in name for part in subset_filename_parts)
+                      and match and (int(match.group()) <= n_analyses))
+        else:
+            result = False
+    except OSError:
+        result = False
+    return result
+
+
+def save_and_get_all_subsets(cli_args, subsets_file_name):
+    """
+    Randomly generate all pairs of subsets, save each of them to a .csv file,
+    and then return dictionaries with pairs of subsets
     :param cli_args: argparse namespace with all command-line arguments. This
-    function uses the --group_1_demo and --group_2_demo arguments.
-    :param subset_size: Integer representing the number of subjects to randomly
-    select from each group
-    :return: Dictionary mapping group numbers to randomly selected subsets
-    of size subset_size from those groups, where each subset is demographically
-    representative of the overall group as shown by chi square. The dictionary
-    also includes the subset size.
+                     function uses the --n_analyses, --output, & --subset_size 
+                     arguments; and passes cli_args to randomly_select_subset.
+    :param subsets_file_name: String with the format of subset file names
+    :return: List of dictionaries, each of which maps a subset's group number
+             to the subset for one pair of subsets
     """
-    # Iterate over both groups to get a subset of each
-    subsets = {1: None, 2: None}
-    euclidean_threshold = get_est_euclid_chi_sq_threshold(subset_size)
-    print("Estimated Euclidean distance threshold for chi-squared "
-          "significance: " + str(euclidean_threshold))
-    for group_num in subsets.keys():
-        group_all = getattr(cli_args, str(group_num).join(("group_", "_demo")))
-        other_group = getattr(cli_args, "group_{}_demo".format(
-                              1 if group_num == 2 else 2))
+    sub_id_col = DEFAULT_DEM_VAR_SUBJID # TODO replace with cli_args arg?
 
-        # Get information about group total dataframe for comparison
-        columns = group_all.select_dtypes(include=["number"]).columns.values
+    # Return value: List of subsets
+    all_subsets = []
 
-        # Compare subset of one group to the other's total
-        group_avgs = [other_group[col].mean(skipna=True) for col in columns]
+    # Keep track of how long each iteration took, to estimate how long the 
+    # entire process will take
+    progress = track_progress(cli_args)
 
-        # Randomly pick subsets until finding 1 that demographically represents
-        # the overall group
-        loops = 0
-        subset_matches_total = False
-        while not subset_matches_total:
-            loops += 1
+    # Format of group demographics variables in cli_args
+    gp_demo_str = "group_{}_demo"
 
-            # Generate subset of group
-            subsets[group_num] = group_all.sample(n=subset_size)
+    # Get average correlation from user-defined number of pairs of average
+    # matrices of randomly generated subsets
+    for i in range(cli_args.n_analyses):
+        for subset_size in cli_args.subset_size:
+            start_time = now()
+            print("Making randomly selected subset pair {} out of {} with {} "
+                  "subjects.".format(i + 1, cli_args.n_analyses, subset_size))
 
-            # Get subset demographics to compare to total demo of other group
-            sub_avgs = [subsets[group_num][col].mean(skipna=True)
-                        for col in columns]
+            # Iterate over both groups to get a subset of each
+            subsets = {1: None, 2: None}
+            print("Estimated Euclidean distance threshold for statistical "
+                  "significance for subset with {} subjects: {}".format(
+                      subset_size, natural_log(subset_size, cli_args.euclidean)
+                  ))
 
-            # If any column in subset averages has mean of N/A, throw it out
-            if not any(np.isnan(el) for el in sub_avgs):
-                eu_dist = euclidean(group_avgs, sub_avgs)
-                subset_matches_total = (eu_dist < euclidean_threshold)
-            if subset_matches_total or loops % 100 == 0:
-                print("{} subsets of group {} randomly generated.".format(
-                      loops, group_num))
-            if subset_matches_total:
-                print("Euclidean distance: {}".format(eu_dist))
+            # Select subsets and make average matrices from .pconns for each
+            for group_n in subsets.keys():
+                subsets[group_n] = randomly_select_subset(
+                    getattr(cli_args, gp_demo_str.format(group_n)),
+                    group_n, subset_size,
+                    getattr(cli_args, gp_demo_str.format(1 if group_n == 2
+                                                         else 2)),
+                    cli_args, check_keep_looping,
+                    natural_log(subset_size, cli_args.euclidean)
+                )
 
-    subsets["subset_size"] = subset_size
-    return subsets
+            # Save randomly generated subsets
+            save_subsets(subsets, cli_args.output, i + 1,
+                         subsets_file_name, sub_id_col)
+            subsets["subset_size"] = subset_size
+            all_subsets.append(subsets)
+
+            # Print how long this has taken, and roughly how much time is left
+            progress = update_progress(progress, "making subsets", subset_size,
+                                       start_time)
+    return all_subsets
 
 
-def get_est_euclid_chi_sq_threshold(subjects):
+def check_keep_looping(loops, eu_dist, group_n, eu_threshold):
+    """ 
+    If a Euclidean distance threshold was given, use it to determine whether to
+    stop randomly generating subsets
+    :param loops: Integer which is how many random subsets have been generated
+    :param eu_dist: Float which is the Euclidean distance between the latest 
+                    randomly generated subset and the total group it is from
+    :param group_n: Integer which is the total group's group number
+    :param eu_threshold: Float above which a Euclidean distance between two 
+                         groups is declared to show a significant difference
+    :return: True if another subset should be randomly made; otherwise False
     """
-    Estimated Euclidean distance threshold for chi-squared significance
-    :param subjects: Integer representing the number of subjects in a subset
-    :return: Float representing the estimated threshold of a Euclidean distance
-    between a subset and a total set such that the subset is not statistically
-    different from the total set according to a chi-squared test.
-    """
-    return 19.0225676337 - (4.6882289084 * np.log(subjects / 100))
+    keep_looping = eu_dist >= eu_threshold
+    if not keep_looping or not loops % count_digits_of(loops):  
+        print("{} subsets of group {} randomly generated."
+              .format(loops, group_n))
+    return keep_looping
 
 
-def save_subsets(subs, output_dir, sub_num):
+def save_subsets(subs, output_dir, sub_num, subsets_file_name, sub_id_col):
     """
     Given a pair of subsets, save them to a .csv file
     :param subs: Dictionary mapping each subset's group number to that subset
-    :param output_dir: Path to directory to save subset .csv files into
-    :param sub_num: Integer that is an arbitrary unique number so that multiple
-    subsets of the same group can be saved without conflicting filenames
+    :param output_dir: String path to directory to save subset .csv files into
+    :param sub_num: Integer that is arbitrary unique number so that multiple
+                    to prevent a group's subsets' filenames from conflicting
+    :param subsets_file_name: String with the format of subset file names
+    :param sub_id_col: String naming the subject ID demographic variable/column
     :return: N/A
     """
     to_save = pd.DataFrame({
-        1: subs[1]["subjectkey"].reset_index(drop=True),
-        2: subs[2]["subjectkey"].reset_index(drop=True)
+        1: subs[1][sub_id_col].reset_index(drop=True),
+        2: subs[2][sub_id_col].reset_index(drop=True)
     })
     to_save.to_csv(os.path.join(
-        output_dir, "_".join(("subset", str(sub_num + 1), "with", str(
-            len(to_save.index)), "subjects.csv"))), index=False)
+        output_dir, subsets_file_name.format(sub_num, len(to_save.index))
+    ), index=False)
 
 
 def get_correl_dataframes(all_subsets, cli_args):
     """
     :param all_subsets: List of dictionaries, each of which maps both group
-    numbers to a randomly selected subset of that group
+                        numbers to a randomly selected subset of that group
     :param cli_args: argparse namespace with all command-line arguments. This
-    function uses the --group_1_avg, --group_2_avg, and --output arguments. It
-    also passes cli_args to the get_average_matrices_of_subsets and
-    get_correls_between functions.
+                     function uses the --group_1_avg, --group_2_avg, and 
+                     --output arguments. It also passes cli_args to 
+                     get_avg_matrices_of_subsets and get_correls_between.
     :return: Dictionary of 3 string:pandas.DataFrame pairs such that each
-    DataFrame has a column of subset sizes and a column of correlations:
+             DataFrame has a column of subset sizes and one of correlations:
        {sub1_sub2: Correlations between the average matrices of both subsets
         sub1_all2: Correls between group 1 subset avg matrix and group 2 total
         sub2_all1: Correls between group 2 subset avg matrix and group 1 total}
     """
     # Return value: Dict of correlation lists to become pandas.DataFrames
-    result = {"sub1_sub2": [], "sub1_all2": [], "sub2_all1": []}
+    correl_lists = {"sub1_sub2": [], "sub1_all2": [], "sub2_all1": []}
+
+    # Keep track of how long this function takes, to show the user during loop
+    progress = track_progress(cli_args)
 
     # Get each pair of average matrices, their correlation with each other, and
     # each one's correlation with the other group's average matrix
-    for sub_pair in all_subsets:
-        sub1_avg, sub2_avg = get_average_matrices_of_subsets(
-            sub_pair.copy(), cli_args).values()
+    for s in range(len(all_subsets)):
+        start_time = now()
+        sub_pair = all_subsets[s]
+        sub1_avg, sub2_avg = get_avg_matrices_of_subsets(sub_pair.copy(),
+                                                         cli_args).values()
+
+        # If data is 2-dimensional, flatten it to make it 1-dimensional
+        subsets = {"sub1": sub1_avg, "all1": cli_args.group_1_avg,
+                   "sub2": sub2_avg, "all2": cli_args.group_2_avg}
+        if cli_args.dimensions == 2:
+            for set_name, set_avg in subsets.items():
+                subsets[set_name] = set_avg.flatten()
+
+        # Get and show all subset correlations; put them in the dict to return
         subset_size = sub_pair.pop("subset_size")
-        print("subset_size: " + str(subset_size))
+        correl_lists = get_sub_pair_correls(subset_size, correl_lists, subsets)
 
-        result["sub1_sub2"].append(get_correls_between(sub1_avg, sub2_avg,
-                                                       subset_size))
-        result["sub1_all2"].append(get_correls_between(cli_args.group_2_avg,
-                                                       sub1_avg, subset_size))
-        result["sub2_all1"].append(get_correls_between(cli_args.group_1_avg,
-                                                       sub2_avg, subset_size))
+        # Print how long this has taken, and roughly how much time is left
+        progress = update_progress(progress, "making average matrices",
+                                   subset_size, start_time)
 
-        def print_correls(title, correls):
-            print("Correlations between average matrices of {}:\n{}".format(
-                title, pformat(correls)))
-
-        print_correls("both subsets", result["sub1_sub2"])
-        print_correls("subset 1 and group 2", result["sub1_all2"])
-        print_correls("subset 2 and group 1", result["sub2_all1"])
-
-    return {name: save_correlations_and_get_df(correls, os.path.join(
-            cli_args.output, "correlations_{}.csv".format(name)))
-            for name, correls in result.items()}
+    return {name: save_correlations_and_get_df(correls, "correlations_{}.csv"
+            .format(name)) for name, correls in correl_lists.items()}
 
 
-def get_average_matrices_of_subsets(subsets_dict, cli_args):
+def get_avg_matrices_of_subsets(subsets_dict, cli_args):
     """
-    :param subsets_dict: Dictionary mapping the group number to its
-    pandas.DataFrame with a subjectkey column listing subject IDs
+    Make and return an average matrix for each subset in subsets_dict
+    :param subsets_dict: Dict mapping the group number to its subset DataFrame
     :param cli_args: argparse namespace with all command-line arguments. This
-    function uses the --inverse_fisher_z and --parent_path arguments. It also
-    passes cli_args to the load_matrix_from_pconn function.
+                     function uses --inverse_fisher_z
     :return: Dictionary matching each group's number to its subset's average
-    matrix from .pconn files of all its subjects
+             matrix from .pconn files of all its subjects
     """
-    # Return value: Average matrices of group 1 and group 2
-    average_matrices = {}
+    # Demographic variable column names (TODO make these all cli_args input arguments?)
+    pconns_col = DEFAULT_DEM_VAR_PCONNS
+    matrix_col = DEFAULT_DEM_VAR_MATR
 
-    sub_size = subsets_dict.pop("subset_size")
-
-    # Local function to append a subject's 2D matrix to the subset's 3D matrix
-    def add_pconn_to_3d_matrix(subject_pconn, full_matrix):
-        """
-        :param subject_pconn: String that represents a path to a .pconn file
-        with a subject's 2D data matrix
-        :param full_matrix: 3D matrix to append the imported data matrix to
-        :return: full_matrix, with subject's matrix added on the 3rd dimension
-        """
-        matrix_to_add = load_matrix_from_pconn(subject_pconn, cli_args)
-        if cli_args.inverse_fisher_z:
-            matrix_to_add = np.tanh(matrix_to_add)
-        return np.dstack((full_matrix, matrix_to_add))
+    average_matrices = {}  # Return value: Average matrices of both groups
+    sub_size = subsets_dict.pop("subset_size")  # Number of subjects per group
 
     # Get all data from .pconn files of every subject in the subset
-    print("Importing .pconn files from " + cli_args.parent_path)
     for subset_num, subset in subsets_dict.items():
-
-        # Get one .pconn file to initialize 3D matrix
-        subject_pconns = subset["pconn_10min"].iteritems()
-        first_pconn = load_matrix_from_pconn(next(subject_pconns)[1], cli_args)
-
-        # Initialize the 3D matrix from that .pconn file
-        all_matrices = first_pconn.reshape((
-            first_pconn.shape[0], first_pconn.shape[1], 1
-        ))
-
-        # Build the rest of the 3D matrix
-        for subject in subject_pconns:
-            all_matrices = add_pconn_to_3d_matrix(subject[1], all_matrices)
-            print("Matrix size: {}. Progress: {:.1%} done.".format(
-                all_matrices.shape, all_matrices.shape[2] / sub_size))
-
-        # Compute average matrix
-        average_matrix = all_matrices.mean(axis=2)
-        average_matrices[subset_num] = average_matrix
-        print("Average matrix:")
-        print(average_matrix)
+        col = (matrix_col if getattr(cli_args, "matrices_conc_{}".format(
+                                     subset_num), None) else pconns_col) 
+        print("Making average matrix for group {} subset.".format(subset_num))
+        average_matrices[subset_num] = get_average_matrix(
+            subset, col, cli_args.inverse_fisher_z
+        )
+        print("Group {} subset's average matrix: \n{}"
+              .format(subset_num, average_matrices[subset_num]))
     return average_matrices
+
+
+def get_sub_pair_correls(subset_size, correl_lists, subsets):
+    """
+    Get, print, and collect the correlations between a subset pair
+    :param subset_size: Integer which is how many subjects are in each subset
+    :param correl_lists: List of dictionaries holding all subset correlations
+    :param subsets: Dictionary mapping label string to average subsets
+    :return: correl_lists, plus the correlations between the subset pair
+    """
+    for df_name in correl_lists.keys():
+        sub_keys = df_name.split("_")
+        correl_lists[df_name].append(get_correls_between(
+            *[subsets[sub] for sub in sub_keys], subset_size
+        ))
+        title = ("group {0}'s subset and group {1}".format(
+                     sub_keys[0][-1], sub_keys[1][-1]
+                 ) if "all" in df_name else "both subsets")
+        print("Correlations between average matrices of {}:\n{}".format(
+              title, pprint.pformat(correl_lists[df_name])))
+    return correl_lists
 
 
 def get_correls_between(arr1, arr2, num_subjects):
     """
     :param arr1: np.ndarray with only numeric values
     :param arr2: np.ndarray with only numeric values
-    :param num_subjects: Integer representing the number of subjects to
-    randomly select from each group
+    :param num_subjects: Integer representing the number of subjects randomly
+                         selected from each group
     :return: Dictionary mapping "Subjects" to num_subjects and mapping
-    "Correlation" to the correlation between both sets flattened
+             "Correlation" to the correlation between arr1 and arr2 
     """
     return {"Subjects": num_subjects,
-            "Correlation": np.corrcoef(arr1.flatten(), arr2.flatten())[0, 1]}
+            "Correlation": np.corrcoef(arr1, arr2)[0, 1]}
 
 
 def save_correlations_and_get_df(correls_list, correl_file_path):
@@ -695,51 +474,43 @@ def save_correlations_and_get_df(correls_list, correl_file_path):
     :return: pandas.DataFrame with a header row ("Subjects", "Correlation"),
     subset sizes in one column, and correlations in its second column
     """
-    n_vs_correls_df = pd.DataFrame(correls_list, columns=[
-        "Subjects", "Correlation"])
-    n_vs_correls_df.to_csv(correl_file_path, index=False)
+    n_vs_correls_df = pd.DataFrame(correls_list, columns=["Subjects",
+                                                          "Correlation"])
+    with open(correl_file_path, "w+") as infile:
+        n_vs_correls_df.to_csv(infile, index=False)
     return n_vs_correls_df
-
-
-class HiddenPrints:
-    """
-    Object used by make_visualization to temporarily suppress text printing
-    while exporting the visualization to a .png file. This code was copied from
-    https://stackoverflow.com/a/45669280
-    """
-    def __enter__(self):
-        self._original_stdout = sys.stdout
-        sys.stdout = open(os.devnull, "w")
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
 
 
 def make_visualization(correls_df, vis_title, cli_args):
     """
     Create a graph visualization from correlation data
     :param correls_df: pandas.DataFrame with one column titled "Subjects" and
-    another titled "Correlations" where both have numeric values
-    :param vis_title: String that is the title of  thevisualization to create
+                       another titled "Correlations"; both have numeric values
+    :param vis_title: String that is the title of the visualization to create
     :param cli_args: argparse namespace with all command-line arguments. This
-    function uses the --axis_font_size, --fill, --output, --title_font_size,
-    and --y_range arguments.
+                     function uses the --axis_font_size, --fill, --output, 
+                     --title_font_size, and --y_range arguments.
     :return: N/A
     """
+    # Colors as RGBA strings, for the visualizations' lines and shading
+    clear = "rgba(0,0,0,0)"
+    def red(opacity):
+        return "rgba(255,0,0,{})".format(opacity)
+
     # Make scatter plot mapping subset size to pairwise correlations
     scatter_plot = plotly.graph_objs.Scatter(
         x=correls_df["Subjects"], y=correls_df["Correlation"], mode="markers",
-        name="All correlations", line_color="rgba(255,0,0,1)",
-        marker={"size": 8})
+        name="All correlations", line_color=red(1), marker={"size": 8}
+    )
 
     # Add average lines to plot using averages of each subset size
-    averages = correls_df.groupby(["Subjects"]).agg(
-        lambda x: x.unique().sum()/x.nunique())
-    print("Average correlations for {}:\n{}".format(vis_title, averages))
+    avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
+                                                x.unique().sum() / x.nunique())
+    print("{}:\n{}".format(vis_title, avgs))
     avgs_plot = plotly.graph_objs.Scatter(
-        x=averages.index.values, y=averages["Correlation"], mode="lines",
-        name="Average correlations")
+        x=avgs.index.values, y=avgs["Correlation"], mode="lines",
+        name="Average correlations"
+    )
 
     # Add upper & lower bounds (all data or confidence intervals) of shaded
     # area to plot as lines
@@ -747,36 +518,31 @@ def make_visualization(correls_df, vis_title, cli_args):
     bounds_params = ({"showlegend": False} if cli_args.fill == "all" else
                      {"name": "95% confidence interval", "showlegend": True})
     lower_plot = plotly.graph_objs.Scatter(
-        x=averages.index.values, y=bounds[0], fill="tonexty",
-        fillcolor="rgba(255,0,0,0.2)", line_color="rgba(0,0,0,0)",
-        **bounds_params
+        x=avgs.index.values, y=bounds[0], fill="tonexty", line_color=clear, 
+        fillcolor=red(0.2), **bounds_params
     )
-    upper_plot = plotly.graph_objs.Scatter(
-        x=averages.index.values, y=bounds[1], line_color="rgba(0,0,0,0)",
-        showlegend=False
-    )
+    upper_plot = plotly.graph_objs.Scatter(x=avgs.index.values, y=bounds[1],
+                                           line_color=clear, showlegend=False)
 
-    # Show plots, either using custom y-axis range or calculating a range
+    # Either use custom y-axis range or calculate a range
     if cli_args.y_range:
         y_axis_min, y_axis_max = cli_args.y_range
     else:
         y_axis_min = correls_df["Correlation"].min()
         y_axis_max = correls_df["Correlation"].max()
-    fig_dict = {
-        "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
-        "layout": get_plot_layout(
-            y_axis_min, y_axis_max, vis_title, cli_args.title_font_size,
-            cli_args.axis_font_size
-        )
-    }
 
-    # Export image as .png file, but suppress the massive block of text that
-    # plotly.offline.plot() would normally print to the command line
-    filename = "".join(vis_title.split()) + ".html"
-    print("Saving .png image of {} offline using browser.".format(filename))
+    # Show image & export it as a .png file, but suppress the massive block of
+    # text that plotly.offline.plot() would normally print to the command line
     with HiddenPrints():
+        filename = "".join(vis_title.split()) + ".html"
         plotly.offline.init_notebook_mode()
-        plotly.offline.plot(fig_dict, image="png", filename=filename)
+        plotly.offline.plot({
+            "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
+            "layout": get_plot_layout(y_axis_min, y_axis_max, vis_title,
+                                      cli_args.title_font_size,
+                                      cli_args.axis_font_size)
+        }, image="png", filename=filename)
+    print("Saving .png image of {} offline using browser.".format(filename))
 
 
 def get_shaded_area_bounds(all_data_df, to_fill):
@@ -784,15 +550,17 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     :param all_data_df: pandas.DataFrame with a "Subjects" column and a
     "Correlation" column, where both only have numeric values
     :param to_fill: String that is either "all" to shade the area between the
-    minimum and maximum correlations for each number of subjects in all_data_df
-    or "confidence_interval" to shade the area within a 95% confidence interval
-    of the correlations for each number of subjects in all_data_df
+                    min and max correlations for each number of subjects in
+                    all_data_df or "confidence_interval" to shade the area 
+                    within a 95% confidence interval of the correlations for
+                    each number of subjects in all_data_df
     :return: Tuple of 2 pandas.Series objects where the first is the lower
-    boundary of the shaded area and the second is the upper boundary
+             boundary of the shaded area and the second is the upper boundary
     """
     if to_fill == "confidence_interval":
         intervals = all_data_df.groupby(["Subjects"]).agg(
-            lambda x: get_confidence_interval(x))
+            lambda x: get_confidence_interval(x)
+        )
         intervals = pd.DataFrame(intervals["Correlation"].tolist(),
                                  index=intervals.index)
         result = (intervals[0], intervals[1])
@@ -804,18 +572,6 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     else:
         raise ValueError("Invalid value for --fill parameter.")
     return result
-
-
-def get_confidence_interval(series, confidence=0.95):
-    """
-    :param series: pandas.Series filled with numeric data
-    :param confidence: Float that represents the percentage for the confidence
-    interval; 95% by default
-    :return: Tuple representing series's confidence interval: (start, end)
-    """
-    mean = series.mean()
-    h = sem(series) * t.ppf((1 + confidence) / 2, len(series) - 1)
-    return mean - h, mean + h
 
 
 def get_plot_layout(y_min, y_max, graph_title, title_size, axis_font_size):
@@ -833,38 +589,35 @@ def get_plot_layout(y_min, y_max, graph_title, title_size, axis_font_size):
     white = "rgb(255, 255, 255)"
     y_range_step = (y_max - y_min)/10  # Space buffer above y_max & below y_min
 
+    # Local function to get the visualization axes' layout parameters
     def get_axis_layout(title, **kwargs):
         """
-        Local function to get all of the parameters that "xaxis" and "yaxis"
-        have in common, avoiding redundant code.
+        Get all of the parameters that "xaxis" and "yaxis" have in common for 
+        get_plot_layout in order to avoid redundant code.
         :param title: String of text to be displayed at the top of the graph
         :param kwargs: Dictionary containing all of the parameters that "xaxis"
-        and "yaxis" do not have in common
+                       and "yaxis" do not have in common
         :return: Dictionary with all parameters needed for formatting an axis
         """
-        result = {
-            "title": {"font": {"size": title_size}, "text": title},
-            "tickcolor": black, "ticklen": 15, "ticks": "outside",
-            "tickfont": {"size": axis_font_size}, "tickwidth": 2,
-            "showline": True, "linecolor": black, "linewidth": 2
-        }
+        result = {"title": {"font": {"size": title_size}, "text": title},
+                  "tickcolor": black, "ticklen": 15, "ticks": "outside",
+                  "tickfont": {"size": axis_font_size}, "tickwidth": 2,
+                  "showline": True, "linecolor": black, "linewidth": 2}
         result.update(kwargs)
         return result
 
-    return {
-        "title": {"text": graph_title, "x": 0.5, "xanchor": "center",
-                  "font": {"size": title_size}},
-        "paper_bgcolor": white,
-        "plot_bgcolor": white,
-        "legend": {"font": {"size": axis_font_size}, "y": 0.1, "x": 0.5},
-        "xaxis": get_axis_layout(
-            title="Sample Size (n)", tick0=0, dtick=100, tickmode="linear"
-        ),
-        "yaxis": get_axis_layout(
-            title="Correlation (r)", nticks=5, tickmode="auto",
-            range=(y_min - y_range_step, y_max + y_range_step),
-        )
-    }
+    return {"title": {"text": graph_title, "x": 0.5, "xanchor": "center",
+                      "font": {"size": title_size}},
+            "paper_bgcolor": white,
+            "plot_bgcolor": white,
+            "legend": {"font": {"size": axis_font_size}, "y": 0.1, "x": 0.5},
+            "xaxis": get_axis_layout(
+                title="Sample Size (n)", tick0=0, dtick=100, tickmode="linear",
+            ),
+            "yaxis": get_axis_layout(
+                title="Correlation (r)", tickmode="auto", nticks=5,
+                range=(y_min - y_range_step, y_max + y_range_step), 
+            )}
 
 
 if __name__ == '__main__':
