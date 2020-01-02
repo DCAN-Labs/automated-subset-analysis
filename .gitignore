@@ -1,4 +1,13 @@
-subset-analysis-*/
-.idea/
-abcd-raw-data*
-all_needed_subsets/
+10-subsets-output
+avg_matrix_tests
+cortical-subs-to-myelin-full-2019-12-31
+cortical-thickness-output-100subs-2019-12-16
+curv-map-output-2019-12-16
+myelin-subs-to-cortical-full-2019-12-26
+old-subset-analysis-tests
+pconns-output-100subs-2019-12-06
+raw
+sulc_depth_avg_dscalars
+sulcus-depth-output-100subs-2019-12-16
+run-note-100subs-2019-12-16.txt
+.idea

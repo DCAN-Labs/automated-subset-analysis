@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Last Updated 2019-12-18
+Last Updated 2020-01-02
 """
 
 ##################################
@@ -56,6 +56,18 @@ def add_default_avg_matr_path_to(cli_args, gp_num):
             "_AVG", get_2_exts_of(example)
         ))))
     return cli_args
+
+
+def as_cli_arg(arg_str, gp_num=None):
+    """
+    :param arg_str: String naming a stored argument taken from the command line
+    :param gp_num: Integer to be interpolated into arg_str, to differentiate
+                   the group that arg_str represents data about
+    :return: String which is the command-line argument form of arg_str
+    """
+    if gp_num is not None:
+        arg_str = arg_str.format(gp_num)
+    return "--" + arg_str.replace("_", "-")
 
 
 def chdir_to(folder):
@@ -545,7 +557,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def example_file():
         parser.add_argument(
             "-ex",
-            "--" + EXAMPLE_FILE.replace("_", "-"),
+            as_cli_arg(EXAMPLE_FILE),
             type=valid_readable_file,
             help="Path to one of the matrix files inputted to the average."
         )
@@ -568,7 +580,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def group_1_avg_file():
         parser.add_argument(
             "-avg1",
-            "--" + GP_AV_FILE.format(1).replace("_", "-"),
+            as_cli_arg(GP_AV_FILE, 1),
             help=help_group_avg_file.format(1)
         )
 
@@ -576,7 +588,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def group_2_avg_file():
         parser.add_argument(
             "-avg2",
-            "--" + GP_AV_FILE.format(2).replace("_", "-"),
+            as_cli_arg(GP_AV_FILE, 2),
             help=help_group_avg_file.format(2)
         )
 
@@ -595,7 +607,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def matrices_conc_1():
         parser.add_argument(
             "-conc1",
-            "--" + GP_MTR_FILE.format(1).replace("_", "-"),
+            as_cli_arg(GP_MTR_FILE, 1),
             type=valid_conc_file,
             help=help_matrices_conc.format(1)
         )
@@ -604,7 +616,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def matrices_conc_2():
         parser.add_argument(
             "-conc2",
-            "--" + GP_MTR_FILE.format(2).replace("_", "-"),
+            as_cli_arg(GP_MTR_FILE, 2),
             type=valid_conc_file,
             help=help_matrices_conc.format(2)
         )
@@ -864,7 +876,7 @@ def print_col_headers_and_get_widths(headers):
 
 
 def randomly_select_subset(group, group_n, sub_n, diff_group,
-                            cli_args, loop_check_fn, eu_threshold=None):
+                           cli_args, loop_check_fn, eu_threshold=None):
     """
     Randomly select subsets of size sub_n from group until finding one which
     doesn't significantly differ demographically from diff_group. Then return
@@ -1018,7 +1030,11 @@ def timeit_fn(fn, runs, fn_args):
 
 def track_progress(cli_args):
     """
-    :return:
+    Initialize dictionary to track how long making average matrices will take
+    :return: Dictionary tracking progress so far, with 3 string:integer pairs
+        {"matrices_left":  Matrices left to make at some point in the process
+         "total_matrices": Matrices to make, total
+         "seconds_taken": Seconds the script spent making matrices so far}
     """
     matrices_to_do = cli_args.n_analyses * sum(cli_args.subset_size)
     return {"total_matrices": matrices_to_do, "matrices_left": matrices_to_do,
@@ -1030,7 +1046,7 @@ def update_progress(progress, doing_what, subset_size, start_time):
     Gets and prints how far the script has gotten processing multiple subsets
     :param progress: Dictionary keeping track of progress so far
     :param doing_what: String describing what the script did in the time
-                       represented by each cell of time_taken
+                       represented by each cell of seconds_taken
     :param subset_size: Integer which is how many subjects are in the subset
     :param start_time: datetime.datetime when this subset started processing
     :return: progress, after updating to account for the last step finishing
@@ -1038,7 +1054,7 @@ def update_progress(progress, doing_what, subset_size, start_time):
     progress["matrices_left"] -= subset_size
     progress["seconds_taken"] += time_since(start_time).total_seconds()
     seconds_left = (progress["matrices_left"] * (progress["seconds_taken"] / (
-                    progress["total_matrices"] -  progress["matrices_left"])))
+                    progress["total_matrices"] - progress["matrices_left"])))
     print("       Time spent so far {0} (H:MM:SS.SSSSSS) is {1}\n"
           "Estimated time remaining {0} (H:MM:SS.SSSSSS) is {2}\n"
           .format(doing_what, stringify_timedelta(progress["seconds_taken"]),
@@ -1052,10 +1068,11 @@ def valid_conc_file(path):
     :param path: String to check if it represents a valid filename
     :return: String representing a valid path to a readable .conc file
     """
-    if os.path.splitext(path)[1] == ".conc":
+    try:
+        assert os.path.splitext(path)[1] == ".conc"
         return valid_readable_file(path)
-    else:
-        parser.error(path + " is not a .conc file.")
+    except (AssertionError, OSError, TypeError):
+        raise argparse.ArgumentTypeError("{} is not a .conc file".format(path))
 
 
 def valid_output_dir(path):
@@ -1087,7 +1104,7 @@ def valid_readable_file(path):
         assert os.access(path, os.R_OK)
         return os.path.abspath(path) 
     except (AssertionError, OSError, TypeError):
-        raise argparse.ArgumentTypeError("Cannot read file at " + path)
+        raise argparse.ArgumentTypeError("Cannot read file at {}".format(path))
 
 
 def valid_whole_number(to_validate):

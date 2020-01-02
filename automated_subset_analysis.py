@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-12-17
+Last Updated 2019-12-31
 """
 
 ##################################
@@ -507,6 +507,7 @@ def make_visualization(correls_df, vis_title, cli_args):
     avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
                                                 x.unique().sum() / x.nunique())
     print("{}:\n{}".format(vis_title, avgs))
+    last_avg = float(avgs.tail(1).values)
     avgs_plot = plotly.graph_objs.Scatter(
         x=avgs.index.values, y=avgs["Correlation"], mode="lines",
         name="Average correlations"
@@ -539,7 +540,7 @@ def make_visualization(correls_df, vis_title, cli_args):
         plotly.offline.plot({
             "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
             "layout": get_plot_layout(y_axis_min, y_axis_max, vis_title,
-                                      cli_args.title_font_size,
+                                      last_avg, cli_args.title_font_size,
                                       cli_args.axis_font_size)
         }, image="png", filename=filename)
     print("Saving .png image of {} offline using browser.".format(filename))
@@ -574,15 +575,16 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     return result
 
 
-def get_plot_layout(y_min, y_max, graph_title, title_size, axis_font_size):
+def get_plot_layout(y_min, y_max, graph_title, last_y, title_size, axis_font):
     """
     Return all format settings for creating a pretty plot visualization. This
     function needs its parameters to determine the range of the y-axis.
     :param y_min: Float that's the lowest y-value to be displayed on the graph
     :param y_max: Float that's the highest y-value to be displayed on the graph
     :param graph_title: String of text to be displayed at the top of the graph
+    :param last_y: Float that's the last y-value to be displayed on the graph
     :param title_size: Integer representing the font size of graph_title
-    :param axis_font_size: Integer representing the font size of axis labels
+    :param axis_font: Integer representing the font size of axis labels
     :return: Nested dictionary containing all needed plot attributes
     """
     black = "rgb(0, 0, 0)"
@@ -601,7 +603,7 @@ def get_plot_layout(y_min, y_max, graph_title, title_size, axis_font_size):
         """
         result = {"title": {"font": {"size": title_size}, "text": title},
                   "tickcolor": black, "ticklen": 15, "ticks": "outside",
-                  "tickfont": {"size": axis_font_size}, "tickwidth": 2,
+                  "tickfont": {"size": axis_font}, "tickwidth": 2,
                   "showline": True, "linecolor": black, "linewidth": 2}
         result.update(kwargs)
         return result
@@ -610,13 +612,15 @@ def get_plot_layout(y_min, y_max, graph_title, title_size, axis_font_size):
                       "font": {"size": title_size}},
             "paper_bgcolor": white,
             "plot_bgcolor": white,
-            "legend": {"font": {"size": axis_font_size}, "y": 0.1, "x": 0.5},
+            "legend": {"font": {"size": axis_font}, "x": 0.5,
+                       # Place the legend in white space away from the graph
+                       "y": 0.9 if last_y < ((y_max + y_min) / 2) else 0.1},
             "xaxis": get_axis_layout(
                 title="Sample Size (n)", tick0=0, dtick=100, tickmode="linear",
             ),
             "yaxis": get_axis_layout(
                 title="Correlation (r)", tickmode="auto", nticks=5,
-                range=(y_min - y_range_step, y_max + y_range_step), 
+                range=(y_min - y_range_step, y_max + y_range_step) 
             )}
 
 
