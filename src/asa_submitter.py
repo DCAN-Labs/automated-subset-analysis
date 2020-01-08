@@ -4,12 +4,12 @@
 SBATCH job submitter for automated subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2020-01-03
-Updated 2020-01-07
+Updated 2020-01-08
 """
 
 ##################################
 #
-# Script to submit many SBATCH jobs, each running an instance of
+# Script to submit a SBATCH job, running many instances of
 # automated_subset_analysis.py, for parallel processing on Exacloud
 #
 ##################################
@@ -25,6 +25,7 @@ import time
 # Constant: Directory holding automated_subset_analysis.py file
 PWD = get_pwd()
 
+
 def main():
 
     # Store and print the date and time when this script started running
@@ -37,7 +38,7 @@ def main():
     )
 
     try:
-        submit_batch_jobs(cli_args)
+        submit_batch_job(cli_args)
         
     except Exception as e:
         get_and_print_timestamp_when(sys.argv[0], "crashed")
@@ -82,9 +83,9 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
                 if validate else parser.parse_args())
 
 
-def submit_batch_jobs(cli_args):
+def submit_batch_job(cli_args):
     """
-    Submit batch jobs to run automated_subset_analysis in parallel
+    Submit batch job to run automated_subset_analysis in parallel
     :param cli_args: argparse namespace with all validated command-line
                      arguments, all of which are used by this function
     :return: N/A
@@ -105,13 +106,13 @@ def submit_batch_jobs(cli_args):
  
     # Call batch command with all needed parameters for SBATCH command and 
     # automated_subset_analysis call
-    for i in range(cli_args["n_analyses"]):  # range(cli_args["jobs"]):
+    for i in range(1, cli_args["n_analyses"] + 1):
         for subset_size in cli_args["subset_size"]:
             cmd = (cli_args["sbatch_string"].split(" ") + [
                 cli_args[gp_demo.format(1)],
                 cli_args[gp_demo.format(2)],
                 "--output",
-                os.path.join(cli_args["output"], "output{}".format(i + 1)),
+                os.path.join(cli_args["output"], "output{}".format(i)),
                 "--n-analyses", "1",
                 "--parallel", PWD,
                 "--subset-size", str(subset_size)
@@ -120,8 +121,7 @@ def submit_batch_jobs(cli_args):
             # print("Running {}".format(cmd))
             subprocess.check_call(cmd)
             time.sleep(5)
-        print("Submitted {}/{} analyses.".format(i + 1,
-                                                 cli_args["n_analyses"]))
+        print("Submitted {}/{} analyses.".format(i, cli_args["n_analyses"]))
         
 if __name__ == "__main__":
     main()

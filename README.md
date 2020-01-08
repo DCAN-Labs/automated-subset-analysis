@@ -126,4 +126,4 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Last Updated by Greg Conan, 2019-12-13
+- Updated by Greg Conan, 2020-01-08
