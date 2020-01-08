@@ -44,40 +44,44 @@ python3 ./make_average_matrix.py --matrices-conc-1 ../raw/group_1_matrix_paths.c
 python3 ./make_average_and_subsets.py ../raw/group_1_demographics.csv ../group_2_demographics.csv --matrices-conc-1 ../raw/group_1_matrix_paths.conc --matrices-conc-2 ../raw/group_2_matrix_paths.conc --group-1-avg-file ../raw/gp1_avg_matrix.dscalar.nii --group-2-avg-file ../raw/gp2_avg_matrix.dscalar.nii --output ../data/ --n-analyses 10 --subset-size 100
 ```
 
+- ### `asa_submitter.py`
+
+
 ## Command-Line Arguments
 
 Most of the command-line arguments used by the scripts in this directory are the same as those used by `automated_subset_analysis.py`, and work in the same way. However, each script accepts a different combination of those arguments, shown in the chart below. There are also two flags accepted by scripts in this directory but not by `automated_subset_analysis.py`, which are described below the combinations chart.
 
 ### Chart: Which Scripts Accept Which Arguments
 
-| Argument Name | automated... | euclidean... | make...matrix | make...subsets |
-|----------------------------|:-:|:-:|:-:|:-:|
-| `group_1_demo_file`        | *Required* | *Required* | | *Required* |
-| `group_2_demo_file`        | *Required* | *Required* | | *Required* |
-| `--columns`                | Optional | Optional | | Optional |
-| `--n-analyses`             | Optional | Optional | | Optional |
-| `--nan-threshold`          | Optional | Optional | | Optional |
-| `--subset-size`            | Optional | Optional | | Optional |
-| `--continuous-variables`   | | Optional | | |
-| `--example-file`           | | | Optional | Optional |
-| `--inverse-fisher-z`       | Optional | | Optional | Optional |
-| `--matrices-conc-1`        | Optional | | *Required* | *Required* |
-| `--matrices-conc-2`        | Optional | | *Required* | *Required* |
-| `--output`                 | Optional | | Optional | Optional |
-| `--group-1-avg-file`       | Optional | | Optional | Optional |
-| `--group-2-avg-file`       | Optional | | Optional | Optional |
-| `--axis-font-size`         | Optional | | | Optional |
-| `--dimensions`             | Optional | | | Optional |
-| `--euclidean`              | Optional | | | Optional |
-| `--fill`                   | Optional | | | Optional |
-| `--title-font-size`        | Optional | | | Optional |
-| `--y-range`                | Optional | | | Optional |
-| `--only-make-graphs`       | Optional | | | |
-| `--skip-subset-generation` | Optional | | | |
+| Argument Name | automated... | euclidean... | make...matrix | make...subsets | asa... |
+|----------------------------|:-:|:-:|:-:|:-:|:-:|
+| `group_1_demo_file`        | *Required* | *Required* | | *Required* | *Required* |
+| `group_2_demo_file`        | *Required* | *Required* | | *Required* | *Required* |
+| `--columns`                | Optional | Optional | | Optional | Optional |
+| `--n-analyses`             | Optional | Optional | | Optional | Optional |
+| `--nan-threshold`          | Optional | Optional | | Optional | Optional |
+| `--subset-size`            | Optional | Optional | | Optional | Optional |
+| `--continuous-variables`   | | Optional | | | |
+| `--example-file`           | | | Optional | Optional | | 
+| `--inverse-fisher-z`       | Optional | | Optional | Optional | Optional
+| `--matrices-conc-1`        | Optional | | *Required* | *Required* | Optional |
+| `--matrices-conc-2`        | Optional | | *Required* | *Required* | Optional |
+| `--output`                 | Optional | | Optional | Optional | Optional |
+| `--group-1-avg-file`       | Optional | | Optional | Optional | Optional |
+| `--group-2-avg-file`       | Optional | | Optional | Optional | Optional |
+| `--axis-font-size`         | Optional | | | Optional | Optional |
+| `--dimensions`             | Optional | | | Optional | Optional |
+| `--euclidean`              | Optional | | | Optional | Optional |
+| `--fill`                   | Optional | | | Optional | Optional |
+| `--title-font-size`        | Optional | | | Optional | Optional |
+| `--y-range`                | Optional | | | Optional | Optional |
+| `--only-make-graphs`       | Optional | | | | Optional |
+| `--skip-subset-generation` | Optional | | | | Optional |
+| `--parallel`               | Optional<sup>1</sup> | | | | |
 
 ### Arguments for Other Scripts
 
-The flags listed above which are used by the main `automated_subset_analysis.py` script take exactly the same values for it as for the other scripts in this repo. However, two of those flags are not used by the main script:
+The flags listed above which are used by the main `automated_subset_analysis.py` script take exactly the same values for it as for the other scripts in this repo. However, 3 of those flags are not used by the main script:
 
 ### `euclidean_threshold_estimator.py`
 
@@ -86,6 +90,13 @@ The flags listed above which are used by the main `automated_subset_analysis.py`
 ### `make_average_matrix.py`
 
 - `--example-file` takes one valid path to a matrix file. It should be the same type of matrix file as the ones listed in `--matrices-conc-1` and `--matrices-conc-2`, so that when the entire group's average matrix is created, the example file can be used as a template to save out the average matrix to a `*.nii` file. By default, if this flag is excluded, the first path listed in `--matrices-conc-1` will be used as the template.
+
+### `asa_submitter.py`
+
+- `--parallel` takes one valid path, the directory containing `automated_subset_analysis.py`. It should be included to simultaneously run multiple different instances of `automated_subset_analysis.py` as a batch command executed by `asa_submitter.py`.
+
+<sup>1</sup>This argument does not need to be used for `asa_submitter.py`, because that script will add it automatically when running `automated_subset_analysis.py`.
+
 
 ## Explanation of Process
 
@@ -102,6 +113,10 @@ Once all of the Euclidean distances are calculated, the script takes the maximum
 - ### `make_average_matrix.py`
 
 Two `.conc` files, one for each group, are given with lists of paths to matrix files. The script will take these and a path to an `--output` directory. For each `.conc` file, the script will save a matrix averaging over every matrix in the `.conc` file into the `--output` directory.
+
+- ### `asa_submitter.py`
+
+T
 
 ## Metadata
 

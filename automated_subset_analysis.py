@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-12-31
+Updated 2019-01-07
 """
 
 ##################################
@@ -15,9 +15,8 @@ Last Updated 2019-12-31
 #
 ##################################
 
-# Imports
+# Standard imports
 import argparse
-from src.conan_tools import *
 import numpy as np
 import os
 import pandas as pd
@@ -25,6 +24,13 @@ import plotly
 import pprint
 import re
 import sys
+
+# Ensure that this script can find its local imports
+for in_arg_num in range(len(sys.argv)):
+    if sys.argv[in_arg_num] == "--parallel":
+        sys.path.append(sys.argv[in_arg_num + 1])
+        break
+from src.conan_tools import *
 
 # Constants
 DEFAULT_DEM_VAR_MATR = "matrix_file"
@@ -36,6 +42,8 @@ VISUALIZATION_TITLES = {
     "sub1_all2": "Group 1 Subset to Group 2 Correlation",
     "sub2_all1": "Group 1 to Group 2 Subset Correlation"
 }
+
+# os.chdir(newdir)
 
 
 def main():
@@ -80,6 +88,7 @@ def main():
     # Print the date and time when this script started and finished running
     print(starting_timestamp)
     get_and_print_timestamp_when(sys.argv[0], "finished")
+    sys.exit(0)
 
 
 def validate_cli_args(cli_args, parser):
@@ -398,8 +407,9 @@ def get_correl_dataframes(all_subsets, cli_args):
         progress = update_progress(progress, "making average matrices",
                                    subset_size, start_time)
 
-    return {name: save_correlations_and_get_df(correls, "correlations_{}.csv"
-            .format(name)) for name, correls in correl_lists.items()}
+    return {name: save_correlations_and_get_df(
+                correls, "correlations_{}.csv".format(name), cli_args
+            ) for name, correls in correl_lists.items()}
 
 
 def get_avg_matrices_of_subsets(subsets_dict, cli_args):
@@ -441,9 +451,9 @@ def get_sub_pair_correls(subset_size, correl_lists, subsets):
     """
     for df_name in correl_lists.keys():
         sub_keys = df_name.split("_")
-        correl_lists[df_name].append(get_correls_between(
-            *[subsets[sub] for sub in sub_keys], subset_size
-        ))
+        params = [subsets[sub] for sub in sub_keys]
+        params.append(subset_size)
+        correl_lists[df_name].append(get_correls_between(*params))
         title = ("group {0}'s subset and group {1}".format(
                      sub_keys[0][-1], sub_keys[1][-1]
                  ) if "all" in df_name else "both subsets")
@@ -465,20 +475,40 @@ def get_correls_between(arr1, arr2, num_subjects):
             "Correlation": np.corrcoef(arr1, arr2)[0, 1]}
 
 
-def save_correlations_and_get_df(correls_list, correl_file_path):
+def save_correlations_and_get_df(correls_list, correl_file_name, cli_args):
     """
     Save correlations to .csv file
     :param correls_list: List of dictionaries where each dictionary contains
     "Subjects" and "Correlation" as a key with a numerical value
-    :param correl_file_path: Path to the file to save correlations into
+    :param correl_file_name: Path to the file to save correlations into
+    
     :return: pandas.DataFrame with a header row ("Subjects", "Correlation"),
     subset sizes in one column, and correlations in its second column
     """
-    n_vs_correls_df = pd.DataFrame(correls_list, columns=["Subjects",
-                                                          "Correlation"])
+    out_dir = (os.path.dirname(cli_args.output)
+               if getattr(cli_args, "parallel", False) else cli_args.output)
+    append_rows_to_file(correls_list, os.path.join(out_dir, correl_file_name))
+    """
     with open(correl_file_path, "w+") as infile:
         n_vs_correls_df.to_csv(infile, index=False)
-    return n_vs_correls_df
+    """
+    return pd.DataFrame(correls_list, columns=["Subjects", "Correlation"])
+    
+    
+def append_rows_to_file(correls_list, filename):
+    """
+    Append a list of pairs of subset sizes and correlations to a file
+    :param correls_list: List of dictionaries where each dictionary contains
+                         "Subjects" and "Correlation" as a key with a number
+    :param filename: String that is a valid path to an existing .csv file
+    :return: N/A
+    """
+    mode = "a" if os.access(filename, os.W_OK) else "w+"
+    with open(filename, mode) as out:
+        if mode == "w+":
+            out.write("Subjects,Correlation\n")
+        for row in correls_list:
+            out.write("{},{}\n".format(row["Subjects"], row["Correlation"]))
 
 
 def make_visualization(correls_df, vis_title, cli_args):

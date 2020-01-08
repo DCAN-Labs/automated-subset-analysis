@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Last Updated 2020-01-02
+Updated 2020-01-07
 """
 
 ##################################
@@ -25,6 +25,7 @@ import pandas as pd
 import random
 from scipy import stats
 from scipy.spatial import distance
+import socket
 import sys
 from timeit import Timer
 
@@ -188,8 +189,8 @@ def get_ASA_arg_names():
             "columns", "dimensions", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "n_analyses", "nan_threshold", "only_make_graphs", "output", 
-            "skip_subset_generation", "subset_size", "title_font_size",
-            "y_range", "inverse_fisher_z"]
+            "parallel", "skip_subset_generation", "subset_size",
+            "title_font_size", "y_range", "inverse_fisher_z"]
 
 
 def get_average_matrix(subset, paths_col, fisherz=None):
@@ -460,7 +461,8 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     help_group_avg_file = (
         "Path to a .nii file containing the average matrix for group {0}. "
         "By default, this path will be to group{0}_10min_mean.pconn.nii "
-        "file in this script's parent folder or the output folder.")
+        "file in this script's parent folder or the output folder."
+    )
     help_matrices_conc = (
         "Path to a .conc file containing only a list of valid paths to group "
         "{0} matrix files. This flag is only needed if your group {0} "
@@ -675,6 +677,19 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=default_out_dir,
             help=("Path to folder to save subset data in. The default folder "
                   "is " + default_out_dir)
+        )
+        
+    # Optional: Parallel processing boolean flag
+    def parallel():
+        parser.add_argument(
+            "--parallel",
+            type=valid_readable_file,
+            help=("Include this argument if you are running the "
+                  "automated_subset_analysis script many times in parallel. "
+                  "It should be a valid path to the directory containing the "
+                  "automated_subset_analysis script. This argument will let "
+                  "multiple running instances of this script append "
+                  "correlation values to the same output .csv files.")
         )
 
     # Optional: Number of subjects in each subset pair
@@ -955,7 +970,10 @@ def rename_exacloud_path(path):
     :param path: String representing a valid file path on Exacloud server
     :return:     String representing a valid file path on Rushmore server
     """
-    return path.replace("home/exacloud/lustre1/fnl_lab", "mnt/rose/shared")
+    return (path.replace("mnt/rose/shared", 
+                         "home/exacloud/lustre1/fnl_lab")
+            if "exa" in socket.gethostname() else 
+            path.replace("home/exacloud/lustre1/fnl_lab", "mnt/rose/shared"))
 
 
 def shuffle_out_subset_of(subset, to_shuffle_out, exclusive_pool):
