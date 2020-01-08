@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-01-07
+Updated 2020-01-08
 """
 
 ##################################
@@ -970,8 +970,7 @@ def rename_exacloud_path(path):
     :param path: String representing a valid file path on Exacloud server
     :return:     String representing a valid file path on Rushmore server
     """
-    return (path.replace("mnt/rose/shared", 
-                         "home/exacloud/lustre1/fnl_lab")
+    return (path.replace("mnt/rose/shared", "home/exacloud/lustre1/fnl_lab")
             if "exa" in socket.gethostname() else 
             path.replace("home/exacloud/lustre1/fnl_lab", "mnt/rose/shared"))
 

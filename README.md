@@ -34,7 +34,7 @@ Example of a basic call to this script:
 python3 automated_subset_analysis.py /mnt/rose/shared/projects/ABCD/avg_pconn_maker/gp1_10min_pconn.csv /mnt/rose/shared/projects/ABCD/avg_pconn_maker/gp2_10min_pconn.csv
 ```
 
-### Optional Arguments (17)
+### Optional Arguments (18)
 
 #### File Paths with Default Values
 
@@ -84,6 +84,8 @@ If `--skip-subset-generation` or `--only-make-graphs` is included, then `--subse
 1. `--fill` takes one parameter, a string that is either `all` or `confidence-interval`. Include this flag to choose which data to shade in the visualization. Choose `all` to shade in the area within the minimum and maximum correlations in the dataset. Choose `confidence-interval` to only shade in the 95% confidence interval of the data. By default, this argument will be `confidence-interval`.
 
 1. `--inverse-fisher-z` takes no parameters. Include this flag to do an inverse Fisher-Z transformation on the matrices imported from the `.pconn` files of the data before getting correlations.
+
+1. `--parallel` takes one valid path, the directory containing `automated_subset_analysis.py`. It should be included to simultaneously run multiple different instances of `automated_subset_analysis.py` as a batch command executed by `asa_submitter.py`, but otherwise it is not needed.
 
 For more information, including the shorthand flags for each option, run this script with the `--help` command: `python3 automated_subset_analysis.py --help`
 

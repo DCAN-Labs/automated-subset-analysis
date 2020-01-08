@@ -3,7 +3,7 @@
 """
 Greg Conan: conan@ohsu.edu
 Created 2019-12-12
-Last Updated 2019-12-18
+Last Updated 2020-01-08
 """
 
 ##################################
@@ -72,37 +72,6 @@ def make_avg_paths_absolute(cli_args):
             setattr(cli_args, avg_matr, os.path.join(cli_args.output,
                                                      avg_matr_path))
     return cli_args
-    
-
-def empty_output_dir(cli_args):
-    """
-    Ensure that output dir is empty. If it isn't, then ask the user whether to 
-    delete all of its contents or quit the script.
-    :param cli_args: argparse namespace with all command-line arguments. This
-                     function uses --output    
-    :return: N/A
-    """
-    # If the output is empty, do nothing; otherwise ask user what to do
-    files_in_output = os.listdir(cli_args.output)
-    if files_in_output:
-        print("Please use an empty directory as the --output argument.")
-        clear_dir = "foo"
-        while clear_dir.lower() != "y" and clear_dir.lower() != "n":
-            clear_dir = input("Do you want to delete everything in the {} "
-                              "directory? Y or N: ".format(cli_args.output))
-
-            # Clear output dir if user says to
-            if clear_dir.lower() == "y":
-                for filename in files_in_output:
-                    filepath = os.path.join(cli_args.output, filename)
-                    try:
-                        shutil.rmtree(filepath)
-                    except OSError:
-                        os.remove(filepath)
-    
-            # Otherwise quit
-            elif clear_dir.lower() == "n":
-                sys.exit(1)
 
 
 def run_ASA_or_MAM_script(to_run, to_include, cli_args):

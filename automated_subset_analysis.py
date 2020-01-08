@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2019-01-07
+Updated 2019-01-08
 """
 
 ##################################
@@ -15,7 +15,7 @@ Updated 2019-01-07
 #
 ##################################
 
-# Standard imports
+# Standard Python imports
 import argparse
 import numpy as np
 import os
@@ -25,25 +25,24 @@ import pprint
 import re
 import sys
 
-# Ensure that this script can find its local imports
-for in_arg_num in range(len(sys.argv)):
-    if sys.argv[in_arg_num] == "--parallel":
-        sys.path.append(sys.argv[in_arg_num + 1])
-        break
+# Ensure that this script can find its local imports if parallel processing
+if "--parallel" in sys.argv:
+    parallel_flag_pos = 0
+    while sys.argv[parallel_flag_pos] != "--parallel":
+        parallel_flag_pos += 1
+    sys.path.append(os.path.abspath(sys.argv[parallel_flag_pos + 1]))
+
+# Local custom imports
 from src.conan_tools import *
 
-# Constants
+# Constants: Default demographic variable names, and names of visualizations
 DEFAULT_DEM_VAR_MATR = "matrix_file"
 DEFAULT_DEM_VAR_PCONNS = "pconn10min"
 DEFAULT_DEM_VAR_SUBJID = "id_redcap"
 PWD = get_pwd()
-VISUALIZATION_TITLES = {
-    "sub1_sub2": "Correlations Between Average Subsets",
-    "sub1_all2": "Group 1 Subset to Group 2 Correlation",
-    "sub2_all1": "Group 1 to Group 2 Subset Correlation"
-}
-
-# os.chdir(newdir)
+VISUALIZATION_TITLES = {"sub1_sub2": "Correlations Between Average Subsets",
+                        "sub1_all2": "Group 1 Subset to Group 2 Correlation",
+                        "sub2_all1": "Group 1 to Group 2 Subset Correlation"}
 
 
 def main():
@@ -65,9 +64,8 @@ def main():
         only_make_graphs(cli_args)
     else:
         try:
-            # Generate and save all subsets and their intercorrelations, unless
-            # user said to skip subset generation and get correlations of pre-
-            # existing subsets
+            # Make and save all subsets and their correlations, unless said to
+            # get pre-existing subsets' correlations instead
             get_subs = (skip_subset_generation
                         if getattr(cli_args, "skip_subset_generation", None)
                         else save_and_get_all_subsets)
@@ -78,8 +76,8 @@ def main():
             chdir_to(cli_args.output)
             for correls_df_name, correls_df in get_correl_dataframes(
                     all_subsets, cli_args).items():
-                make_visualization(correls_df, VISUALIZATION_TITLES[
-                                   correls_df_name], cli_args)
+                make_visualization(correls_df, cli_args,
+                                   VISUALIZATION_TITLES[correls_df_name])
 
         except Exception as e:
             get_and_print_timestamp_when(sys.argv[0], "crashed")
@@ -170,7 +168,8 @@ def replace_paths_column(demographics, matr_conc):
         extract_subject_id_from(x.loc[DEFAULT_DEM_VAR_MATR])
     ), axis="columns")
     if DEFAULT_DEM_VAR_PCONNS in demographics:
-        demographics = demographics.drop(DEFAULT_DEM_VAR_PCONNS, axis="columns")
+        demographics = demographics.drop(DEFAULT_DEM_VAR_PCONNS,
+                                         axis="columns")
     return demographics.merge(matrix_paths, on=DEFAULT_DEM_VAR_SUBJID)
     
 
@@ -192,7 +191,7 @@ def only_make_graphs(cli_args):
             VISUALIZATION_TITLES[csv_sets_name] if csv_sets_name in
             VISUALIZATION_TITLES else "Correlations Between Unknown Groups"
         )
-        make_visualization(correls_df, csv_sets_name, cli_args)
+        make_visualization(correls_df, cli_args, csv_sets_name)
 
 
 def skip_subset_generation(cli_args, subsets_file_name):
@@ -207,10 +206,18 @@ def skip_subset_generation(cli_args, subsets_file_name):
              number to a subset of that group, and also has an element mapping 
              the string "subset_size" to the number of subjects in both subsets
     """
-    sub_id_col = DEFAULT_DEM_VAR_SUBJID # TODO make this a cli_args input argument?
+    all_subsets = []              # Return value: List of subsets
+    GP_DEMO_STR = "group_{}_demo" # cli_args attribute with group demographics
 
-    # Return value: List of subsets
-    all_subsets = []
+    # Local function to get a group's subset's demographics data
+    def get_demographics_of_subset_of_gp(gp_num):
+        """
+        :param gp_num: String with the group number, either "1" or "2"       
+        :return: pandas.Series with all of a subset's data from group gp_num
+        """
+        gp_demo = getattr(cli_args, GP_DEMO_STR.format(gp_num))
+        return gp_demo[gp_demo[DEFAULT_DEM_VAR_SUBJID
+                               ].isin(subset_df.pop(gp_num).tolist())]
 
     # Get every subset based on cli_args, excluding other files in the same dir
     subset_name_parts = subsets_file_name.split("{}")
@@ -222,13 +229,9 @@ def skip_subset_generation(cli_args, subsets_file_name):
             subset_df = pd.read_csv(subset_csv)
             if ("1" in subset_df and "2" in subset_df 
                     and len(subset_df.index) in cli_args.subset_size):
-                all_subsets.append({
-                    1: cli_args.group_1_demo[cli_args.group_1_demo[
-                        sub_id_col].isin(subset_df.pop("1").tolist())],
-                    2: cli_args.group_2_demo[cli_args.group_2_demo[
-                        sub_id_col].isin(subset_df.pop("2").tolist())],
-                    "subset_size": len(subset_df.index)
-                })
+                all_subsets.append({1: get_demographics_of_subset_of_gp("1"),
+                                    2: get_demographics_of_subset_of_gp("2"),
+                                    "subset_size": len(subset_df.index)})
     if len(all_subsets) == 0:
         raise FileNotFoundError("No subsets found at {}"
                                 .format(cli_args.skip_subset_generation))
@@ -275,8 +278,6 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     :return: List of dictionaries, each of which maps a subset's group number
              to the subset for one pair of subsets
     """
-    sub_id_col = DEFAULT_DEM_VAR_SUBJID # TODO replace with cli_args arg?
-
     # Return value: List of subsets
     all_subsets = []
 
@@ -315,7 +316,7 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
 
             # Save randomly generated subsets
             save_subsets(subsets, cli_args.output, i + 1,
-                         subsets_file_name, sub_id_col)
+                         subsets_file_name, DEFAULT_DEM_VAR_SUBJID)
             subsets["subset_size"] = subset_size
             all_subsets.append(subsets)
 
@@ -355,10 +356,16 @@ def save_subsets(subs, output_dir, sub_num, subsets_file_name, sub_id_col):
     :param sub_id_col: String naming the subject ID demographic variable/column
     :return: N/A
     """
-    to_save = pd.DataFrame({
-        1: subs[1][sub_id_col].reset_index(drop=True),
-        2: subs[2][sub_id_col].reset_index(drop=True)
-    })
+    # Local function to get all subject ID strings in a group's subset
+    def extract_subj_ids(gp_num):
+        """
+        :param gp_num: Integer which is the number of the group to get IDs from
+        :return: pandas.Series with all of group gp_num's subset's subject IDs
+        """
+        return subs[gp_num][sub_id_col].reset_index(drop=True)
+
+    # Save the pair of subsets to .csv
+    to_save = pd.DataFrame({1: extract_subj_ids(1), 2: extract_subj_ids(2)})
     to_save.to_csv(os.path.join(
         output_dir, subsets_file_name.format(sub_num, len(to_save.index))
     ), index=False)
@@ -421,17 +428,14 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
     :return: Dictionary matching each group's number to its subset's average
              matrix from .pconn files of all its subjects
     """
-    # Demographic variable column names (TODO make these all cli_args input arguments?)
-    pconns_col = DEFAULT_DEM_VAR_PCONNS
-    matrix_col = DEFAULT_DEM_VAR_MATR
-
     average_matrices = {}  # Return value: Average matrices of both groups
     sub_size = subsets_dict.pop("subset_size")  # Number of subjects per group
 
     # Get all data from .pconn files of every subject in the subset
     for subset_num, subset in subsets_dict.items():
-        col = (matrix_col if getattr(cli_args, "matrices_conc_{}".format(
-                                     subset_num), None) else pconns_col) 
+        col = (DEFAULT_DEM_VAR_MATR if getattr(
+                   cli_args, "matrices_conc_{}".format(subset_num), None
+               ) else DEFAULT_DEM_VAR_PCONNS) 
         print("Making average matrix for group {} subset.".format(subset_num))
         average_matrices[subset_num] = get_average_matrix(
             subset, col, cli_args.inverse_fisher_z
@@ -457,8 +461,8 @@ def get_sub_pair_correls(subset_size, correl_lists, subsets):
         title = ("group {0}'s subset and group {1}".format(
                      sub_keys[0][-1], sub_keys[1][-1]
                  ) if "all" in df_name else "both subsets")
-        print("Correlations between average matrices of {}:\n{}".format(
-              title, pprint.pformat(correl_lists[df_name])))
+        print("Correlations between average matrices of {}:\n{}"
+              .format(title, pprint.pformat(correl_lists[df_name])))
     return correl_lists
 
 
@@ -488,10 +492,6 @@ def save_correlations_and_get_df(correls_list, correl_file_name, cli_args):
     out_dir = (os.path.dirname(cli_args.output)
                if getattr(cli_args, "parallel", False) else cli_args.output)
     append_rows_to_file(correls_list, os.path.join(out_dir, correl_file_name))
-    """
-    with open(correl_file_path, "w+") as infile:
-        n_vs_correls_df.to_csv(infile, index=False)
-    """
     return pd.DataFrame(correls_list, columns=["Subjects", "Correlation"])
     
     
@@ -511,15 +511,15 @@ def append_rows_to_file(correls_list, filename):
             out.write("{},{}\n".format(row["Subjects"], row["Correlation"]))
 
 
-def make_visualization(correls_df, vis_title, cli_args):
+def make_visualization(correls_df, cli_args, vis_title):
     """
     Create a graph visualization from correlation data
     :param correls_df: pandas.DataFrame with one column titled "Subjects" and
                        another titled "Correlations"; both have numeric values
-    :param vis_title: String that is the title of the visualization to create
     :param cli_args: argparse namespace with all command-line arguments. This
                      function uses the --axis_font_size, --fill, --output, 
                      --title_font_size, and --y_range arguments.
+    :param vis_title: String that is the title of the visualization to create
     :return: N/A
     """
     # Colors as RGBA strings, for the visualizations' lines and shading
@@ -578,8 +578,8 @@ def make_visualization(correls_df, vis_title, cli_args):
 
 def get_shaded_area_bounds(all_data_df, to_fill):
     """
-    :param all_data_df: pandas.DataFrame with a "Subjects" column and a
-    "Correlation" column, where both only have numeric values
+    :param all_data_df: pandas.DataFrame with two columns of numeric values, 
+                        labeled "Subjects" and "Correlation"
     :param to_fill: String that is either "all" to shade the area between the
                     min and max correlations for each number of subjects in
                     all_data_df or "confidence_interval" to shade the area 
@@ -588,6 +588,17 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     :return: Tuple of 2 pandas.Series objects where the first is the lower
              boundary of the shaded area and the second is the upper boundary
     """
+
+    # Local function to aggregate correlation values
+    def aggregate_data(quantile):
+        """
+        :param quantile: Integer representing the quantile of data to aggregate
+        :return: pandas.Series with all aggregated correlation values
+        """
+        return all_data_df.groupby(["Subjects"]).agg(
+            lambda x: x.quantile(quantile)
+        )["Correlation"]
+
     if to_fill == "confidence_interval":
         intervals = all_data_df.groupby(["Subjects"]).agg(
             lambda x: get_confidence_interval(x)
@@ -596,10 +607,7 @@ def get_shaded_area_bounds(all_data_df, to_fill):
                                  index=intervals.index)
         result = (intervals[0], intervals[1])
     elif to_fill == "all":
-        result = (all_data_df.groupby(["Subjects"]).agg(
-                      lambda x: x.quantile(0))["Correlation"],
-                  all_data_df.groupby(["Subjects"]).agg(
-                      lambda x: x.quantile(1))["Correlation"])
+        result = (aggregate_data(0), aggregate_data(1))
     else:
         raise ValueError("Invalid value for --fill parameter.")
     return result

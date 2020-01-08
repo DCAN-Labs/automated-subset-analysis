@@ -2,8 +2,9 @@
 
 These are a collection of scripts which supplement `automated_subset_analysis.py`, using much of the same functionality:
 - `euclidean_threshold_estimator.py` calculates the equation used by `automated_subset_analysis.py` to validate random subsets, using the latter script's `--euclidean` argument.
-- `--make_average_matrix.py` takes groups of matrices and makes one average matrix for each group. Those average matrices can then be used for the `--group-1-avg-file` and `--group-2-avg-file` arguments of `automated_subset_analysis.py`.
-- `--make_average_and_subsets.py` runs `make_average_matrix.py` to get average matrices, and then immediately afterwards runs `automated_subset_analysis.py` using those average matrices.
+- `make_average_matrix.py` takes groups of matrices and makes one average matrix for each group. Those average matrices can then be used for the `--group-1-avg-file` and `--group-2-avg-file` arguments of `automated_subset_analysis.py`.
+- `make_average_and_subsets.py` runs `make_average_matrix.py` to get average matrices, and then immediately afterwards runs `automated_subset_analysis.py` using those average matrices.
+- `asa_submitter.py` runs many instances of `automated_subset_analysis.py` in parallel to speed up its data processing.
 - `conan_tools.py` does nothing, but it contains all of the functionality used by multiple scripts in this repository.
 
 ## Purpose
@@ -14,7 +15,15 @@ Randomly generates subsets in the same way as `automated_subset_analysis.py`, bu
 
 - ### `make_average_matrix.py`
 
-Accepts paths to `.nii` data files, then creates new `.nii` files with the average values of the originals. Each group's average matrix is saved into its own new `.nii` file. The output matrices will have the same dimensions as the original `.nii` files, but each point in the average matrix will have the average of all of the values at the same point in the input matrices from a group. Using this script on every matrix in group 1 provides the `--matrices-conc-1` file to use in `automated_subset_analysis.py`. The same applies to group 2 and `--matrices-conc-2`.
+Accepts paths to `.nii` data files, then creates new `.nii` files with the average values of the originals. Each group's average matrix is saved into its own new `.nii` file. The output matrices will have the same dimensions as the original `.nii` files, but each point in the average matrix will have the average of all of the values at the same point in the input matrices from a group. Using this script on every matrix in group 1 provides the `--group-1-avg-file` file to use in `automated_subset_analysis.py`. The same applies to group 2 and `--group-2-avg-file`.
+
+- ### `make_average_and_subsets.py`
+
+This script is simply a wrapper to run `make_average_matrix.py` on two groups, and then run `automated_subset_analysis.py` using the new average matrices. Immediately after `make_average_matrix.py` finishes running, `automated_subset_analysis.py` will correlate the newly created average matrices with subsets of the two groups, and then produce exactly the same outputs that you would expect from running `automated_subset_analysis.py` normally.
+
+- ### `asa_submitter.py`
+
+This script is another wrapper, but for a different reason: Instead of running two scripts in a row, this runs many instances of `automated_subset_analysis.py` at once for improved speed. It was written to run a batch job using the [slurm job scheduler](https://slurm.schedmd.com) on the Exacloud server, so it may not work on using other servers or job schedulers without minor changes to the code.
 
 - ### `conan_tools.py`
 
@@ -41,10 +50,14 @@ python3 ./make_average_matrix.py --matrices-conc-1 ../raw/group_1_matrix_paths.c
 - #### `make_average_and_subsets.py`
 
 ```
-python3 ./make_average_and_subsets.py ../raw/group_1_demographics.csv ../group_2_demographics.csv --matrices-conc-1 ../raw/group_1_matrix_paths.conc --matrices-conc-2 ../raw/group_2_matrix_paths.conc --group-1-avg-file ../raw/gp1_avg_matrix.dscalar.nii --group-2-avg-file ../raw/gp2_avg_matrix.dscalar.nii --output ../data/ --n-analyses 10 --subset-size 100
+python3 ./make_average_and_subsets.py ../raw/group_1_demographics.csv ../raw/group_2_demographics.csv --matrices-conc-1 ../raw/group_1_matrix_paths.conc --matrices-conc-2 ../raw/group_2_matrix_paths.conc --group-1-avg-file ../raw/gp1_avg_matrix.dscalar.nii --group-2-avg-file ../raw/gp2_avg_matrix.dscalar.nii --output ../data/ --n-analyses 10 --subset-size 100
 ```
 
 - ### `asa_submitter.py`
+
+```
+python3 ./asa_submitter.py ../raw/group_1_demographics.csv ../raw/group_2_demographics.csv --sbatch-string "sbatch --time=1:00:00 --cpus 1 -A my_group ./automated_subset_analysis.py" --output ./data/ --n-analyses 5 --subset-size 50 100 200 
+```
 
 
 ## Command-Line Arguments
@@ -78,25 +91,25 @@ Most of the command-line arguments used by the scripts in this directory are the
 | `--only-make-graphs`       | Optional | | | | Optional |
 | `--skip-subset-generation` | Optional | | | | Optional |
 | `--parallel`               | Optional<sup>1</sup> | | | | |
+| `--sbatch-string`          | | | | | *Required* |
+
+<sup>1</sup>The `--parallel` argument does not need to be used for `asa_submitter.py`, because that script will add it automatically when running `automated_subset_analysis.py`.
 
 ### Arguments for Other Scripts
 
 The flags listed above which are used by the main `automated_subset_analysis.py` script take exactly the same values for it as for the other scripts in this repo. However, 3 of those flags are not used by the main script:
 
-### `euclidean_threshold_estimator.py`
+#### `euclidean_threshold_estimator.py`
 
 - `--continuous-variables` takes one or more strings which name columns in the demographics `.csv` files with continuous instead of categorical data. The data from any variable from this list will be tested for statistical significance using a T-test. Any other data will be tested for significance using a chi-squared test. By default, if this flag is excluded, these four demographic variables will be considered continuous: `demo_prnt_ed_v2b`, `interview_age`, `rel_group_id`, and `rel_relationship`.
 
-### `make_average_matrix.py`
+#### `make_average_matrix.py`
 
 - `--example-file` takes one valid path to a matrix file. It should be the same type of matrix file as the ones listed in `--matrices-conc-1` and `--matrices-conc-2`, so that when the entire group's average matrix is created, the example file can be used as a template to save out the average matrix to a `*.nii` file. By default, if this flag is excluded, the first path listed in `--matrices-conc-1` will be used as the template.
 
-### `asa_submitter.py`
+#### `asa_submitter.py`
 
-- `--parallel` takes one valid path, the directory containing `automated_subset_analysis.py`. It should be included to simultaneously run multiple different instances of `automated_subset_analysis.py` as a batch command executed by `asa_submitter.py`.
-
-<sup>1</sup>This argument does not need to be used for `asa_submitter.py`, because that script will add it automatically when running `automated_subset_analysis.py`.
-
+- `--sbatch-string` is a string containing all of the required parameters to run multiple instances of `automated_subset_analysis.py` in parallel as an SBATCH command. All other input arguments will be appended to this string, and then the result will be executed. This flag must be included with a command string in order to run `asa_submitter.py`.
 
 ## Explanation of Process
 
@@ -114,13 +127,23 @@ Once all of the Euclidean distances are calculated, the script takes the maximum
 
 Two `.conc` files, one for each group, are given with lists of paths to matrix files. The script will take these and a path to an `--output` directory. For each `.conc` file, the script will save a matrix averaging over every matrix in the `.conc` file into the `--output` directory.
 
+- ### `make_average_and_subsets.py`
+
+Normally, `automated_subset_analysis.py` accepts already-existing average matrices of both groups as its `--group-1-avg-file` and `--group-2-avg-file` arguments. However, `make_average_and_subsets.py` runs `make_average_matrix.py` to create new ones and then passes them to `automated_subset_analysis.py`.
+
 - ### `asa_submitter.py`
 
-T
+The `--sbatch-string` is executed together with all of the other input parameters to run a batch job of many (specifically, `--n-analyses` * the number of parameters in `--subset-size`) instances of `automated_subset_analysis.py` at once. Each instance will save its output subsets into a subdirectory of the `--output` directory. The number of subdirectories created will be equl to `--n-analyses`, numbered from 1 to `--n-analyses` like so:
+  - `./data/output1`
+  - `./data/output2`
+  - ... 
+  - `./data/output20` (if `--n-analyses` is 20)
+
+Each instance will append its output correlations to 3 `.csv` files in the `--output` directory: 1 for correlating the subsets to each other, and 1 each correlating a group to the subsets of the other group. If there are already correlation `.csv` files in the `--output` directory from previous runs, the output correlation values of any subsequent runs will be appended to the already-existing files. Otherwise, new `.csv` files will be created. 
 
 ## Metadata
 
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-12-16
-- Last Updated by Greg Conan, 2019-12-18
+- Updated by Greg Conan, 2020-01-08
