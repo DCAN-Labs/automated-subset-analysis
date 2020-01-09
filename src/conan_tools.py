@@ -85,7 +85,7 @@ def chdir_to(folder):
 def count_digits_of(a_num):
     """
     :a_num: Numeric value
-    :return: Integer which is the number of digits in a_num
+    :return: Integer which is 10 to the power of the number of digits in a_num
     """
     return 10**int(math.log10(a_num))
 
@@ -188,8 +188,8 @@ def get_ASA_arg_names():
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
             "columns", "dimensions", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
-            "n_analyses", "nan_threshold", "only_make_graphs", "output", 
-            "parallel", "skip_subset_generation", "subset_size",
+            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs", 
+            "output", "parallel", "skip_subset_generation", "subset_size",
             "title_font_size", "y_range", "inverse_fisher_z"]
 
 
@@ -319,7 +319,7 @@ def get_pwd():
 def get_subset_of(group, subset_size):
     """
     Randomly select, validate, and return a subset of a given size from group
-    :param group: pandas.DataFrame which is an entire group of subjects
+    :param group: pandas.DataFrame++ which is an entire group of subjects
     :param subset_size: Integer which is the amount of subjects to randomly 
                         select from group to put into a subset
     :return: pandas.DataFrame which is a valid subset of group
@@ -649,6 +649,17 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   .format(default_nan_threshold))
         )
 
+    # Optional: Don't demographically match subsets
+    def no_matching():
+        parser.add_argument(
+            "--no-matching",
+            action="store_true",
+            help=("By default, each subset of one group is matched to the "
+                  "other group so their demographics show no statistically "
+                  "significant difference. Include this flag to skip matching "
+                  "and include subsets regardless of demographic differences.")
+        )
+
     # Optional: Import data from .csv files already created by this script
     # instead of creating new ones
     def only_make_graphs():
@@ -926,7 +937,8 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
         loops += 1
 
         # Generate subset of group and get its columns' averages as a list
-        subset = get_subset_of(group, sub_n)
+        subset = (group.sample(n=sub_n) if cli_args.no_matching
+                  else get_subset_of(group, sub_n))
         sub_avgs = [subset[col].mean(skipna=True)
                     for col in columns.columns.tolist()]
 

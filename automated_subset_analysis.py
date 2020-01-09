@@ -562,6 +562,9 @@ def make_visualization(correls_df, cli_args, vis_title):
         y_axis_min = correls_df["Correlation"].min()
         y_axis_max = correls_df["Correlation"].max()
 
+    # Get average x to calculate range of ticks on graph's x-axis
+    x_avg = correls_df["Subjects"].mean()
+
     # Show image & export it as a .png file, but suppress the massive block of
     # text that plotly.offline.plot() would normally print to the command line
     with HiddenPrints():
@@ -571,7 +574,7 @@ def make_visualization(correls_df, cli_args, vis_title):
             "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
             "layout": get_plot_layout(y_axis_min, y_axis_max, vis_title,
                                       last_avg, cli_args.title_font_size,
-                                      cli_args.axis_font_size)
+                                      cli_args.axis_font_size, x_avg)
         }, image="png", filename=filename)
     print("Saving .png image of {} offline using browser.".format(filename))
 
@@ -613,7 +616,8 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     return result
 
 
-def get_plot_layout(y_min, y_max, graph_title, last_y, title_size, axis_font):
+def get_plot_layout(y_min, y_max, graph_title, last_y, title_size, axis_font,
+                    x_avg):
     """
     Return all format settings for creating a pretty plot visualization. This
     function needs its parameters to determine the range of the y-axis.
@@ -623,6 +627,7 @@ def get_plot_layout(y_min, y_max, graph_title, last_y, title_size, axis_font):
     :param last_y: Float that's the last y-value to be displayed on the graph
     :param title_size: Integer representing the font size of graph_title
     :param axis_font: Integer representing the font size of axis labels
+    :param x_avg: Float that's the average of the subset sizes
     :return: Nested dictionary containing all needed plot attributes
     """
     black = "rgb(0, 0, 0)"
@@ -654,7 +659,8 @@ def get_plot_layout(y_min, y_max, graph_title, last_y, title_size, axis_font):
                        # Place the legend in white space away from the graph
                        "y": 0.9 if last_y < ((y_max + y_min) / 2) else 0.1},
             "xaxis": get_axis_layout(
-                title="Sample Size (n)", tick0=0, dtick=100, tickmode="linear",
+                title="Sample Size (n)", tick0=0, tickmode="linear",
+                dtick=count_digits_of(x_avg)
             ),
             "yaxis": get_axis_layout(
                 title="Correlation (r)", tickmode="auto", nticks=5,
