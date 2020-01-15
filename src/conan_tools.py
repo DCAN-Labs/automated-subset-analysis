@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-01-08
+Updated 2020-01-15
 """
 
 ##################################
@@ -36,13 +36,14 @@ GP_MTR_FILE = "matrices_conc_{}"
 EXAMPLE_FILE = "example_file"
 
 
-def add_default_avg_matr_path_to(cli_args, gp_num):
+def add_default_avg_matr_path_to(cli_args, gp_num, parser):
     """
     Get paths to average matrices for each group, if not given
     :param cli_args: argparse namespace with most needed command-line
                      arguments. This function uses the --matrices_conc_{} and
                      --example_file arguments, but only the former is required
     :param gp_num: Integer which is the group number
+    :param parser: argparse ArgumentParser to raise error if anything's invalid
     :return: cli_args, but with the group_{}_avg_file argument for group gp_num
     """
     gp_avg_arg = GP_AV_FILE.format(gp_num)
@@ -50,8 +51,12 @@ def add_default_avg_matr_path_to(cli_args, gp_num):
         matr_conc = getattr(cli_args, GP_MTR_FILE.format(gp_num))
         example = getattr(cli_args, EXAMPLE_FILE, None)
         if not example:
-            with open(matr_conc) as matr_conc_file_obj:
-                example = matr_conc_file_obj.readline().strip()
+            if matr_conc:
+                with open(matr_conc) as matr_conc_file_obj:
+                    example = matr_conc_file_obj.readline().strip()
+            else:
+                parser.error("Please use either the --matrices-conc-{} or "
+                             "--example-file argument.".format(gp_num))
         setattr(cli_args, gp_avg_arg, os.path.join(cli_args.output, "".join((
             os.path.splitext(os.path.basename(matr_conc))[0],
             "_AVG", get_2_exts_of(example)
@@ -635,11 +640,22 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
 
     # Optional: NaN threshold
     def nan_threshold():
+
+        def float_between_0_and_1(val):
+            """
+            :param val: Object to check, then throw an error if it is invalid
+            :return: val if it is a float between 0 and 1 (otherwise invalid)
+            """
+            float_val = float(val)
+            if 0 < float_val < 1:
+                return float_val
+            else:
+                raise argparse.ArgumentTypeError("Must be a number between 0 "
+                                                 "and 1.")
         parser.add_argument(
             "-nan",
             "--nan-threshold",
-            type=(lambda x: float(x) if 0 < float(x) < 1 else argparse
-                  .ArgumentTypeError("Must be a number between 0 and 1.")),
+            type=float_between_0_and_1,
             default=default_nan_threshold,
             help=("Enter a number between 0 and 1. If the percentage of rows "
                   "with NaN values in the data for either demographic file is "
@@ -789,13 +805,15 @@ def look_for_file(orig_path, cli_args, arg_name, pwd, parser):
     if os.access(orig_path, os.R_OK):
         found_path = orig_path
 
-    # Try to find file in other likely locations (output, PWD, parent dir)
+    # Try to find file in other likely locations (output and PWD)
     else:
         filename = os.path.basename(orig_path) 
         for possible_dir in (cli_args.output, pwd):
             found_path = os.path.join(possible_dir, filename)
             if os.access(found_path, os.R_OK):
                 break
+            else:
+                found_path = None
 
         # Raise parser error if file is not found
         if not found_path:

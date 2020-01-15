@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2019-01-08
+Updated 2019-01-15
 """
 
 ##################################
@@ -112,7 +112,10 @@ def validate_cli_args(cli_args, parser):
             if path_skip_sub == "output":
                 cli_args.skip_subset_generation = cli_args.output
             elif path_skip_sub:
-                valid_readable_file(path_skip_sub)  # Raise error unless valid
+                try:  # Raise error unless valid
+                    valid_readable_file(path_skip_sub)
+                except argparse.ArgumentTypeError as e:
+                    sys.exit(e)
 
             # For each group, get the path to the directory with its .pconn
             # files, and the path to the file containing its demographic data
@@ -144,8 +147,11 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
 
         # Get average matrix for each group
         group_avg_file_str = "group_{}_avg_file".format(gp_num)
-        cli_args = add_default_avg_matr_path_to(cli_args, gp_num)
-        valid_readable_file(getattr(cli_args, group_avg_file_str))
+        cli_args = add_default_avg_matr_path_to(cli_args, gp_num, parser)
+        try:
+            valid_readable_file(getattr(cli_args, group_avg_file_str))
+        except argparse.ArgumentTypeError as e:
+            sys.exit(e)
         setattr(cli_args, "group_{}_avg".format(gp_num),
                 load_matrix_from(getattr(cli_args, group_avg_file_str)))
 
@@ -262,7 +268,7 @@ def is_subset_csv(path, subset_filename_parts, n_analyses):
                       and match and (int(match.group()) <= n_analyses))
         else:
             result = False
-    except OSError:
+    except (OSError, argparse.ArgumentTypeError):
         result = False
     return result
 
