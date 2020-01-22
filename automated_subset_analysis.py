@@ -147,7 +147,8 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
 
         # Get average matrix for each group
         group_avg_file_str = "group_{}_avg_file".format(gp_num)
-        cli_args = add_default_avg_matr_path_to(cli_args, gp_num, parser)
+        cli_args = add_default_avg_matr_path_to(cli_args, gp_num, parser,
+                                                DEFAULT_DEM_VAR_PCONNS)
         try:
             valid_readable_file(getattr(cli_args, group_avg_file_str))
         except argparse.ArgumentTypeError as e:
@@ -174,8 +175,7 @@ def replace_paths_column(demographics, matr_conc):
         extract_subject_id_from(x.loc[DEFAULT_DEM_VAR_MATR])
     ), axis="columns")
     if DEFAULT_DEM_VAR_PCONNS in demographics:
-        demographics = demographics.drop(DEFAULT_DEM_VAR_PCONNS,
-                                         axis="columns")
+        demographics = demographics.drop(DEFAULT_DEM_VAR_PCONNS, axis=1)
     return demographics.merge(matrix_paths, on=DEFAULT_DEM_VAR_SUBJID)
     
 

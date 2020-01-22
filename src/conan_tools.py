@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-01-15
+Updated 2020-01-22
 """
 
 ##################################
@@ -36,27 +36,34 @@ GP_MTR_FILE = "matrices_conc_{}"
 EXAMPLE_FILE = "example_file"
 
 
-def add_default_avg_matr_path_to(cli_args, gp_num, parser):
+def add_default_avg_matr_path_to(cli_args, gp_num, parser, default):
     """
     Get paths to average matrices for each group, if not given
     :param cli_args: argparse namespace with most needed command-line
-                     arguments. This function uses the --matrices_conc_{} and
-                     --example_file arguments, but only the former is required
+                     arguments. This function uses the --matrices-conc-{} and
+                     --example-file arguments, but only the former is required
     :param gp_num: Integer which is the group number
     :param parser: argparse ArgumentParser to raise error if anything's invalid
+    :param default: String naming the demographic data spreadsheet's column
+                    with all of the paths to matrix files
     :return: cli_args, but with the group_{}_avg_file argument for group gp_num
     """
     gp_avg_arg = GP_AV_FILE.format(gp_num)
     if not getattr(cli_args, gp_avg_arg, None):
         matr_conc = getattr(cli_args, GP_MTR_FILE.format(gp_num))
+        if not matr_conc:
+            parser.error("Please provide the {} argument or the {} argument. "
+                         .format(as_cli_arg(GP_AV_FILE.format(gp_num)),
+                                 as_cli_arg(GP_MTR_FILE.format(gp_num))))
         example = getattr(cli_args, EXAMPLE_FILE, None)
         if not example:
-            if matr_conc:
-                with open(matr_conc) as matr_conc_file_obj:
-                    example = matr_conc_file_obj.readline().strip()
-            else:
-                parser.error("Please use either the --matrices-conc-{} or "
-                             "--example-file argument.".format(gp_num))
+            with open(matr_conc) as matr_conc_file_obj:
+                example = matr_conc_file_obj.readline().strip()
+        else:
+            parser.error("Please provide the {} argument or the "
+                         "--example-file argument.".format(as_cli_arg(
+                            GP_MTR_FILE.format(gp_num)
+                         )))
         setattr(cli_args, gp_avg_arg, os.path.join(cli_args.output, "".join((
             os.path.splitext(os.path.basename(matr_conc))[0],
             "_AVG", get_2_exts_of(example)
