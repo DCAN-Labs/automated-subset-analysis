@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-01-22
+Updated 2020-01-23
 """
 
 ##################################
@@ -270,10 +270,9 @@ def get_confidence_interval(series, confidence=0.95):
     :param confidence: Float that represents the percentage for the confidence
                        interval; 95% by default
     :return: Tuple of series's confidence interval: (lower bound, upper bound)
-    """
-    mean = series.mean()
-    h = (stats.sem(series) * stats.t.ppf((1 + confidence)/2, len(series) - 1))
-    return mean - h, mean + h
+    """    
+    return stats.norm.interval(confidence, loc=series.mean(),
+                               scale=series.std() / np.sqrt(len(series)))
 
 
 def get_family_info(subject, family_vars):

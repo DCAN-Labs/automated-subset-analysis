@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-01-15
+Updated 2020-01-22
 """
 
 ##################################
@@ -35,10 +35,11 @@ if "--parallel" in sys.argv:
 # Local custom imports
 from src.conan_tools import *
 
-# Constants: Default demographic variable names, and names of visualizations
+# Constants: Default demographic variable names, PWD, visualization names, etc
 DEFAULT_DEM_VAR_MATR = "matrix_file"
 DEFAULT_DEM_VAR_PCONNS = "pconn10min"
 DEFAULT_DEM_VAR_SUBJID = "id_redcap"
+GP_DEMO_STR = "group_{}_demo"
 PWD = get_pwd()
 VISUALIZATION_TITLES = {"sub1_sub2": "Correlations Between Average Subsets",
                         "sub1_all2": "Group 1 Subset to Group 2 Correlation",
@@ -81,12 +82,11 @@ def main():
 
         except Exception as e:
             get_and_print_timestamp_when(sys.argv[0], "crashed")
-            raise e
+            sys.exit(e)
 
     # Print the date and time when this script started and finished running
     print(starting_timestamp)
     get_and_print_timestamp_when(sys.argv[0], "finished")
-    sys.exit(0)
 
 
 def validate_cli_args(cli_args, parser):
@@ -112,16 +112,14 @@ def validate_cli_args(cli_args, parser):
             if path_skip_sub == "output":
                 cli_args.skip_subset_generation = cli_args.output
             elif path_skip_sub:
-                try:  # Raise error unless valid
-                    valid_readable_file(path_skip_sub)
-                except argparse.ArgumentTypeError as e:
-                    sys.exit(e)
+                valid_readable_file(path_skip_sub)  # Raise error unless valid
 
             # For each group, get the path to the directory with its .pconn
             # files, and the path to the file containing its demographic data
             cli_args = add_pconn_paths_to(cli_args, [1, 2], parser)
+
         return cli_args
-    except OSError as e:
+    except (OSError, argparse.ArgumentTypeError) as e:
         parser.error(str(e))
 
 
@@ -136,7 +134,7 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
     for gp_num in group_nums:
 
         # Import all of this group's demographics; drop empty columns
-        group_demo_str = "group_{}_demo".format(gp_num)
+        group_demo_str = GP_DEMO_STR.format(gp_num)
         demographics = get_group_demographics(cli_args, gp_num,
                                               group_demo_str + "_file", parser)
 
@@ -152,10 +150,9 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
         try:
             valid_readable_file(getattr(cli_args, group_avg_file_str))
         except argparse.ArgumentTypeError as e:
-            sys.exit(e)
+            parser.error(str(e))
         setattr(cli_args, "group_{}_avg".format(gp_num),
                 load_matrix_from(getattr(cli_args, group_avg_file_str)))
-
     return cli_args
 
 
@@ -212,8 +209,7 @@ def skip_subset_generation(cli_args, subsets_file_name):
              number to a subset of that group, and also has an element mapping 
              the string "subset_size" to the number of subjects in both subsets
     """
-    all_subsets = []              # Return value: List of subsets
-    GP_DEMO_STR = "group_{}_demo" # cli_args attribute with group demographics
+    all_subsets = []  # Return value: List of subsets
 
     # Local function to get a group's subset's demographics data
     def get_demographics_of_subset_of_gp(gp_num):
@@ -258,16 +254,14 @@ def is_subset_csv(path, subset_filename_parts, n_analyses):
     """
     try:
         path = valid_readable_file(path)
-        if os.path.splitext(path)[1] == ".csv":
-            with open(path, "r") as infile:
-                row_1 = infile.readline().strip().split(",")
-            name = os.path.basename(path)
-            match = re.search(r"(\d+)", name)
-            result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
-                      and all(part in name for part in subset_filename_parts)
-                      and match and (int(match.group()) <= n_analyses))
-        else:
-            result = False
+        assert os.path.splitext(path)[1] == ".csv"
+        with open(path, "r") as infile:
+            row_1 = infile.readline().strip().split(",")
+        name = os.path.basename(path)
+        match = re.search(r"(\d+)", name)
+        result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
+                  and all(part in name for part in subset_filename_parts)
+                  and match and (int(match.group()) <= n_analyses))
     except (OSError, argparse.ArgumentTypeError):
         result = False
     return result
@@ -291,9 +285,6 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     # entire process will take
     progress = track_progress(cli_args)
 
-    # Format of group demographics variables in cli_args
-    gp_demo_str = "group_{}_demo"
-
     # Get average correlation from user-defined number of pairs of average
     # matrices of randomly generated subsets
     for i in range(cli_args.n_analyses):
@@ -312,9 +303,9 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
             # Select subsets and make average matrices from .pconns for each
             for group_n in subsets.keys():
                 subsets[group_n] = randomly_select_subset(
-                    getattr(cli_args, gp_demo_str.format(group_n)),
+                    getattr(cli_args, GP_DEMO_STR.format(group_n)),
                     group_n, subset_size,
-                    getattr(cli_args, gp_demo_str.format(1 if group_n == 2
+                    getattr(cli_args, GP_DEMO_STR.format(1 if group_n == 2
                                                          else 2)),
                     cli_args, check_keep_looping,
                     natural_log(subset_size, cli_args.euclidean)
@@ -332,22 +323,21 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     return all_subsets
 
 
-def check_keep_looping(loops, eu_dist, group_n, eu_threshold):
+def check_keep_looping(loops, eu_dist, gp_n, eu_threshold):
     """ 
     If a Euclidean distance threshold was given, use it to determine whether to
     stop randomly generating subsets
     :param loops: Integer which is how many random subsets have been generated
     :param eu_dist: Float which is the Euclidean distance between the latest 
                     randomly generated subset and the total group it is from
-    :param group_n: Integer which is the total group's group number
+    :param gp_n: Integer which is the total group's group number
     :param eu_threshold: Float above which a Euclidean distance between two 
                          groups is declared to show a significant difference
     :return: True if another subset should be randomly made; otherwise False
     """
     keep_looping = eu_dist >= eu_threshold
     if not keep_looping or not loops % count_digits_of(loops):  
-        print("{} subsets of group {} randomly generated."
-              .format(loops, group_n))
+        print("{} subsets of group {} randomly generated.".format(loops, gp_n))
     return keep_looping
 
 
@@ -434,21 +424,20 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
     :return: Dictionary matching each group's number to its subset's average
              matrix from .pconn files of all its subjects
     """
-    average_matrices = {}  # Return value: Average matrices of both groups
+    avg_matrices = {}  # Return value: Average matrices of both groups
     sub_size = subsets_dict.pop("subset_size")  # Number of subjects per group
 
     # Get all data from .pconn files of every subject in the subset
-    for subset_num, subset in subsets_dict.items():
+    for sub_num, subset in subsets_dict.items():
         col = (DEFAULT_DEM_VAR_MATR if getattr(
-                   cli_args, "matrices_conc_{}".format(subset_num), None
+                   cli_args, "matrices_conc_{}".format(sub_num), None
                ) else DEFAULT_DEM_VAR_PCONNS) 
-        print("Making average matrix for group {} subset.".format(subset_num))
-        average_matrices[subset_num] = get_average_matrix(
-            subset, col, cli_args.inverse_fisher_z
-        )
+        print("Making average matrix for group {} subset.".format(sub_num))
+        avg_matrices[sub_num] = get_average_matrix(subset, col,
+                                                   cli_args.inverse_fisher_z)
         print("Group {} subset's average matrix: \n{}"
-              .format(subset_num, average_matrices[subset_num]))
-    return average_matrices
+              .format(sub_num, avg_matrices[sub_num]))
+    return avg_matrices
 
 
 def get_sub_pair_correls(subset_size, correl_lists, subsets):
@@ -597,7 +586,6 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     :return: Tuple of 2 pandas.Series objects where the first is the lower
              boundary of the shaded area and the second is the upper boundary
     """
-
     # Local function to aggregate correlation values
     def aggregate_data(quantile):
         """
