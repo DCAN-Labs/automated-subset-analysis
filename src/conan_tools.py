@@ -200,9 +200,9 @@ def get_ASA_arg_names():
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
             "columns", "dimensions", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
-            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs", 
-            "output", "parallel", "skip_subset_generation", "subset_size",
-            "title_font_size", "y_range", "inverse_fisher_z"]
+            "marker_size", "n_analyses", "nan_threshold", "no_matching",
+            "only_make_graphs", "output", "parallel", "skip_subset_generation",
+            "subset_size", "title_font_size", "y_range", "inverse_fisher_z"]
 
 
 def get_average_matrix(subset, paths_col, fisherz=None):
@@ -454,6 +454,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                                'rel_group_id', 'rel_relationship']
     default_dims = (1, 2)
     default_euclid_vals = [-0.44897407617376806, 3.7026679337563486]
+    default_marker_size = 5
     default_n_analyses = 1
     default_nan_threshold = 0.1
     default_out_dir = os.path.join(pwd, "data")
@@ -616,6 +617,17 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "correlations.")
         )
 
+    def marker_size():
+        parser.add_argument(
+            "-marker",
+            "--marker-size",
+            type=valid_whole_number,
+            default=default_marker_size,
+            help=("Positive integer, the size of each data point in the "
+                  "visualization that this script will create. The default "
+                  "marker size is {}.".format(default_marker_size))
+        )
+
     # Optional: .conc file with paths to group 1 matrix files
     def matrices_conc_1():
         parser.add_argument(
@@ -656,8 +668,8 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             if 0 < float_val < 1:
                 return float_val
             else:
-                raise argparse.ArgumentTypeError("Must be a number between 0 "
-                                                 "and 1.")
+                parser.error("NaN threshold must be a number between 0 and 1.")
+
         parser.add_argument(
             "-nan",
             "--nan-threshold",

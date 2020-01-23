@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-01-22
+Updated 2020-01-23
 """
 
 ##################################
@@ -525,7 +525,8 @@ def make_visualization(correls_df, cli_args, vis_title):
     # Make scatter plot mapping subset size to pairwise correlations
     scatter_plot = plotly.graph_objs.Scatter(
         x=correls_df["Subjects"], y=correls_df["Correlation"], mode="markers",
-        name="All correlations", line_color=red(1), marker={"size": 8}
+        name="All correlations", line_color=red(1),
+        marker={"size": cli_args.marker_size}
     )
 
     # Add average lines to plot using averages of each subset size
