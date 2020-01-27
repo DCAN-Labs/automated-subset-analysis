@@ -101,7 +101,7 @@ def submit_batch_job(cli_args):
                 if isinstance(cli_args[arg], list):
                     for el in cli_args[arg]:
                         asa_optional_args.append(str(el))
-                else:
+                elif not isinstance(cli_args[arg], bool):
                     asa_optional_args.append(str(cli_args[arg]))
  
     # Call batch command with all needed parameters for SBATCH command and 
@@ -118,7 +118,7 @@ def submit_batch_job(cli_args):
                 "--subset-size", str(subset_size)
             ] + asa_optional_args)
         
-            # print("Running {}".format(cmd))
+            print("Running {}".format(cmd))
             subprocess.check_call(cmd)
             time.sleep(5)
         print("Submitted {}/{} analyses.".format(i, cli_args["n_analyses"]))

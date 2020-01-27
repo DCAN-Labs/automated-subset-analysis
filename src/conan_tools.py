@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-01-23
+Updated 2020-01-27
 """
 
 ##################################
@@ -198,7 +198,7 @@ def get_ASA_arg_names():
              automated_subset_analysis.py as a cli_args argparse parameter
     """
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
-            "columns", "dimensions", "euclidean", "fill", GP_AV_FILE.format(1),
+            "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "marker_size", "n_analyses", "nan_threshold", "no_matching",
             "only_make_graphs", "output", "parallel", "skip_subset_generation",
@@ -268,11 +268,15 @@ def get_confidence_interval(series, confidence=0.95):
     """
     :param series: pandas.Series filled with numeric data
     :param confidence: Float that represents the percentage for the confidence
-                       interval; 95% by default
+                       interval; 0.95 (95%) by default
     :return: Tuple of series's confidence interval: (lower bound, upper bound)
-    """    
-    return stats.norm.interval(confidence, loc=series.mean(),
-                               scale=series.std() / np.sqrt(len(series)))
+    """
+    # Confidence interval = mean +/- (standard deviation * Z-score / sqrt(n))
+    distance_from_mean = (series.std() * stats.norm.ppf(1-(1-confidence)/2)
+                          / np.sqrt(len(series.index)))
+    series_mean = series.mean()
+    return series_mean - distance_from_mean, series_mean + distance_from_mean
+
 
 
 def get_family_info(subject, family_vars):
@@ -530,21 +534,6 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=default_continuous_vars,
             help=("All names of columns in the demographics .csv file which "
                   "have continuous instead of categorical data.")
-        )
-
-    # Optional: 1D vs. 2D data
-    def dimensions():
-        parser.add_argument(
-            "-data",
-            "--dimensions",
-            type=int,
-            choices=default_dims,
-            default=default_dims[1],
-            help=("Enter the number of dimensions in the shape of the input "
-                  "data. If you are analyzing subsets of *conn.nii "
-                  "connectivity matrices, the number of dimensions is 2. If "
-                  "your data is *scalar.nii scalars, then the number of "
-                  "dimensions is 1. Valid options: {}.".format(default_dims))
         )
 
     # Optional: Custom logarithmic function for Euclidean distance threshold

@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-01-23
+Updated 2020-01-24
 """
 
 ##################################
@@ -398,9 +398,8 @@ def get_correl_dataframes(all_subsets, cli_args):
         # If data is 2-dimensional, flatten it to make it 1-dimensional
         subsets = {"sub1": sub1_avg, "all1": cli_args.group_1_avg,
                    "sub2": sub2_avg, "all2": cli_args.group_2_avg}
-        if cli_args.dimensions == 2:
-            for set_name, set_avg in subsets.items():
-                subsets[set_name] = set_avg.flatten()
+        for set_name, set_avg in subsets.items():
+            subsets[set_name] = set_avg.flatten()
 
         # Get and show all subset correlations; put them in the dict to return
         subset_size = sub_pair.pop("subset_size")
