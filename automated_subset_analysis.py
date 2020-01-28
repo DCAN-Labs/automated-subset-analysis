@@ -623,7 +623,7 @@ def get_plot_layout(all_args):
     # Local variables from unpacked list of args to use in layout: 
     #   Lowest and highest y-values to show, graph title, last y-value to show,
     #   graph title and axis title font sizes, average subset size
-    y_min, y_max, title, last_y, title_size, axis_font, x_avg, hide = all_args
+    y_min, y_max, title, last_y, title_size, axis_font, x_avg, show = all_args
 
     # Others: RGBA colors as well as space buffer above y_max and below y_min
     black = "rgb(0, 0, 0)"
@@ -648,7 +648,7 @@ def get_plot_layout(all_args):
 
     return {"title": {"text": title, "x": 0.5, "xanchor": "center",
                       "font": {"size": title_size}},
-            "paper_bgcolor": white, "plot_bgcolor": white, "showlegend": hide,
+            "paper_bgcolor": white, "plot_bgcolor": white, "showlegend": show,
             "legend": {"font": {"size": axis_font}, "x": 0.5,
                        # Place the legend in white space away from the graph
                        "y": 0.9 if last_y < ((y_max + y_min) / 2) else 0.1},

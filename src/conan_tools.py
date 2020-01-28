@@ -367,7 +367,7 @@ def get_subset_of(group, subset_size):
         If a subject has a sibling not in the subset, add that subject to a set
         :param sub: pandas.Series representing a subject, 1 row of a DataFrame
         :param subs_missing_sibs: Set of strings; all are invalid subjects' IDs
-        :return N/A:
+        :return: N/A
         """
         if has_missing_siblings(sub, subset, FAMILY):
             subs_missing_sibs.add(sub[ID])
@@ -380,7 +380,7 @@ def get_subset_of(group, subset_size):
         :param subset_df: pandas.DataFrame with all subjects in the subset
         :param missing: Set of strings which are all the subject IDs of the 
                         subjects in subset_df with siblings not in subset_df
-        :return N/A:
+        :return: N/A
         """
         subset_df.apply(lambda sub: get_invalid_subset_member(sub, missing),
                         axis="columns")
@@ -966,8 +966,7 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
     :param group: pandas.DataFrame with all demographic data from one group
     :param group_n: Integer which is the group number of the group df
     :param sub_n: Integer which is how many subjects to put in the subset
-    :param diff_group: pandas.DataFrame with all demographic data from the
-                       other group
+    :param diff_group: pandas.DataFrame with the other group's demographic data
     :param cli_args: argparse namespace with all given command-line arguments
     :param loop_check_fn: Function to determine when a subset is found
     :param eu_threshold: Float which is the Euclidean distance threshold
