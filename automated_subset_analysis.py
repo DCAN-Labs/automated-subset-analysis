@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-01-24
+Updated 2020-01-27
 """
 
 ##################################
@@ -41,9 +41,6 @@ DEFAULT_DEM_VAR_PCONNS = "pconn10min"
 DEFAULT_DEM_VAR_SUBJID = "id_redcap"
 GP_DEMO_STR = "group_{}_demo"
 PWD = get_pwd()
-VISUALIZATION_TITLES = {"sub1_sub2": "Correlations Between Average Subsets",
-                        "sub1_all2": "Group 1 Subset to Group 2 Correlation",
-                        "sub2_all1": "Group 1 to Group 2 Subset Correlation"}
 
 
 def main():
@@ -77,8 +74,7 @@ def main():
             chdir_to(cli_args.output)
             for correls_df_name, correls_df in get_correl_dataframes(
                     all_subsets, cli_args).items():
-                make_visualization(correls_df, cli_args,
-                                   VISUALIZATION_TITLES[correls_df_name])
+                make_visualization(correls_df, cli_args, correls_df_name)
 
         except Exception as e:
             get_and_print_timestamp_when(sys.argv[0], "crashed")
@@ -189,11 +185,7 @@ def only_make_graphs(cli_args):
     for correls_csv in cli_args.only_make_graphs:
         correls_df = pd.read_csv(correls_csv)
         csv_sets_name = get_which_str_in_filename(correls_csv, list(
-            VISUALIZATION_TITLES.keys()))
-        csv_sets_name = (
-            VISUALIZATION_TITLES[csv_sets_name] if csv_sets_name in
-            VISUALIZATION_TITLES else "Correlations Between Unknown Groups"
-        )
+            default_vis_titles().keys()))
         make_visualization(correls_df, cli_args, csv_sets_name)
 
 
@@ -262,7 +254,7 @@ def is_subset_csv(path, subset_filename_parts, n_analyses):
         result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
                   and all(part in name for part in subset_filename_parts)
                   and match and (int(match.group()) <= n_analyses))
-    except (OSError, argparse.ArgumentTypeError):
+    except (OSError, argparse.ArgumentTypeError, AssertionError):
         result = False
     return result
 
@@ -281,8 +273,7 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     # Return value: List of subsets
     all_subsets = []
 
-    # Keep track of how long each iteration took, to estimate how long the 
-    # entire process will take
+    # Track how long each iteration took to estimate how long they'll all take
     progress = track_progress(cli_args)
 
     # Get average correlation from user-defined number of pairs of average
@@ -382,7 +373,7 @@ def get_correl_dataframes(all_subsets, cli_args):
         sub2_all1: Correls between group 2 subset avg matrix and group 1 total}
     """
     # Return value: Dict of correlation lists to become pandas.DataFrames
-    correl_lists = {"sub1_sub2": [], "sub1_all2": [], "sub2_all1": []}
+    correl_lists = {sub_key: [] for sub_key in default_vis_titles().keys()}
 
     # Keep track of how long this function takes, to show the user during loop
     progress = track_progress(cli_args)
@@ -505,7 +496,7 @@ def append_rows_to_file(correls_list, filename):
             out.write("{},{}\n".format(row["Subjects"], row["Correlation"]))
 
 
-def make_visualization(correls_df, cli_args, vis_title):
+def make_visualization(correls_df, cli_args, corr_df_name):
     """
     Create a graph visualization from correlation data
     :param correls_df: pandas.DataFrame with one column titled "Subjects" and
@@ -513,7 +504,7 @@ def make_visualization(correls_df, cli_args, vis_title):
     :param cli_args: argparse namespace with all command-line arguments. This
                      function uses the --axis_font_size, --fill, --output, 
                      --title_font_size, and --y_range arguments.
-    :param vis_title: String that is the title of the visualization to create
+    :param corr_df_name: String identifying the visualization to create
     :return: N/A
     """
     # Colors as RGBA strings, for the visualizations' lines and shading
@@ -529,6 +520,8 @@ def make_visualization(correls_df, cli_args, vis_title):
     )
 
     # Add average lines to plot using averages of each subset size
+    print("Correls df identifier: {}".format(corr_df_name))
+    vis_title = default_vis_titles()[corr_df_name]
     avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
                                                 x.unique().sum() / x.nunique())
     print("{}:\n{}".format(vis_title, avgs))
@@ -550,16 +543,6 @@ def make_visualization(correls_df, cli_args, vis_title):
     upper_plot = plotly.graph_objs.Scatter(x=avgs.index.values, y=bounds[1],
                                            line_color=clear, showlegend=False)
 
-    # Either use custom y-axis range or calculate a range
-    if cli_args.y_range:
-        y_axis_min, y_axis_max = cli_args.y_range
-    else:
-        y_axis_min = correls_df["Correlation"].min()
-        y_axis_max = correls_df["Correlation"].max()
-
-    # Get average x to calculate range of ticks on graph's x-axis
-    x_avg = correls_df["Subjects"].mean()
-
     # Show image & export it as a .png file, but suppress the massive block of
     # text that plotly.offline.plot() would normally print to the command line
     with HiddenPrints():
@@ -567,11 +550,31 @@ def make_visualization(correls_df, cli_args, vis_title):
         plotly.offline.init_notebook_mode()
         plotly.offline.plot({
             "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
-            "layout": get_plot_layout(y_axis_min, y_axis_max, vis_title,
-                                      last_avg, cli_args.title_font_size,
-                                      cli_args.axis_font_size, x_avg)
+            "layout": get_plot_layout(get_layout_args(cli_args, correls_df,
+                                                      corr_df_name, last_avg))
         }, image="png", filename=filename)
     print("Saving .png image of {} offline using browser.".format(filename))
+
+
+def get_layout_args(cli_args, correls_df, correls_df_name, last_avg):
+    """
+    :param cli_args: argparse namespace with all command-line arguments. This
+                     function uses the --axis_font_size, --title_font_size, and 
+                     --y_range arguments.
+    :param correls_df: pandas.DataFrame with one column titled "Subjects" and
+                       another titled "Correlations"; both have numeric values
+    :param corr_df_name: String identifying the visualization to create
+    :return: Tuple of all input arguments for make_visualization function
+    """
+    # For y-axis range and title, use default value or one chosen by user
+    y_axis_min, y_axis_max = cli_args.y_range if cli_args.y_range else (
+        correls_df["Correlation"].min(), correls_df["Correlation"].max()
+    )
+    title = getattr(cli_args, "graph_title", None)
+    title = title if title else default_vis_titles()[correls_df_name]
+    return (y_axis_min, y_axis_max, title, last_avg, cli_args.title_font_size,
+            cli_args.axis_font_size, correls_df["Subjects"].mean(), 
+            not cli_args.hide_legend)
 
 
 def get_shaded_area_bounds(all_data_df, to_fill):
@@ -610,25 +613,23 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     return result
 
 
-def get_plot_layout(y_min, y_max, graph_title, last_y, title_size, axis_font,
-                    x_avg):
+def get_plot_layout(layout_args):
     """
-    Return all format settings for creating a pretty plot visualization. This
-    function needs its parameters to determine the range of the y-axis.
-    :param y_min: Float that's the lowest y-value to be displayed on the graph
-    :param y_max: Float that's the highest y-value to be displayed on the graph
-    :param graph_title: String of text to be displayed at the top of the graph
-    :param last_y: Float that's the last y-value to be displayed on the graph
-    :param title_size: Integer representing the font size of graph_title
-    :param axis_font: Integer representing the font size of axis labels
-    :param x_avg: Float that's the average of the subset sizes
+    Return all format settings for creating a pretty plot visualization.
+    :param layout_args: Tuple of all arguments needed for visualization format
     :return: Nested dictionary containing all needed plot attributes
     """
+    # Local variables from unpacked list of args to use in layout: 
+    #   Lowest and highest y-values to show, graph title, last y-value to show,
+    #   graph title and axis title font sizes, average subset size, show legend
+    (y_min, y_max, graph_title, last_y,
+     title_size, axis_font, x_avg, show) = layout_args
+
+    # Others: RGBA colors as well as space buffer above y_max and below y_min
     black = "rgb(0, 0, 0)"
     white = "rgb(255, 255, 255)"
-    y_range_step = (y_max - y_min)/10  # Space buffer above y_max & below y_min
+    y_range_step = (y_max - y_min) / 10
 
-    # Local function to get the visualization axes' layout parameters
     def get_axis_layout(title, **kwargs):
         """
         Get all of the parameters that "xaxis" and "yaxis" have in common for 
@@ -647,8 +648,7 @@ def get_plot_layout(y_min, y_max, graph_title, last_y, title_size, axis_font,
 
     return {"title": {"text": graph_title, "x": 0.5, "xanchor": "center",
                       "font": {"size": title_size}},
-            "paper_bgcolor": white,
-            "plot_bgcolor": white,
+            "paper_bgcolor": white, "plot_bgcolor": white, "showlegend": show,
             "legend": {"font": {"size": axis_font}, "x": 0.5,
                        # Place the legend in white space away from the graph
                        "y": 0.9 if last_y < ((y_max + y_min) / 2) else 0.1},

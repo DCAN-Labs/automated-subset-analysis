@@ -102,6 +102,16 @@ def count_digits_of(a_num):
     return 10**int(math.log10(a_num))
 
 
+def default_vis_titles():
+    """
+    :return: Dictionary mapping the keyword identifying each visualization to
+             the text to use as that visualization's titles
+    """
+    return {"sub1_sub2": "Correlations Between Average Subsets",
+            "sub1_all2": "Group 1 Subset to Group 2 Correlation",
+            "sub2_all1": "Group 1 to Group 2 Subset Correlation"}
+
+
 def drop_nan_rows_from(group, group_num, nan_threshold, parser):
     """
     Check how many rows have NaN values. If it's under the threshold,
@@ -200,9 +210,10 @@ def get_ASA_arg_names():
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
             "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
-            "marker_size", "n_analyses", "nan_threshold", "no_matching",
-            "only_make_graphs", "output", "parallel", "skip_subset_generation",
-            "subset_size", "title_font_size", "y_range", "inverse_fisher_z"]
+            "hide_legend", "marker_size", "n_analyses", "nan_threshold",
+            "no_matching", "only_make_graphs", "output", "parallel", 
+            "skip_subset_generation", "subset_size", "graph_title", 
+            "title_font_size", "y_range", "inverse_fisher_z"]
 
 
 def get_average_matrix(subset, paths_col, fisherz=None):
@@ -579,6 +590,14 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "--fill will be {}.".format(*choices_fill, choices_fill[1]))
         )
 
+    def graph_title():
+        parser.add_argument(
+            "-title",
+            "--graph-title",
+            help=("Include this argument with a custom title to show it at "
+                  "the top of the output visualizations. Otherwise, the ")
+        )
+
     # Optional: Path to average matrix .pconn file for group 1
     def group_1_avg_file():
         parser.add_argument(
@@ -593,6 +612,15 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             "-avg2",
             as_cli_arg(GP_AV_FILE, 2),
             help=help_group_avg_file.format(2)
+        )
+
+    def hide_legend():
+        parser.add_argument(
+            "-hide",
+            "--hide-legend",
+            action="store_true",
+            help=("Include this flag to prevent the visualization from "
+                  "displaying a legend in the corner.")
         )
 
     # Optional: Do inverse Fisher-Z transformation (hyperbolic tangent) on data
@@ -743,7 +771,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     # Optional: Font size of title text in visualization
     def title_font_size():
         parser.add_argument(
-            "-title",
+            "-tfont",
             "--title-font-size",
             default=default_text_size_title,
             type=valid_whole_number,
@@ -1010,7 +1038,7 @@ def rename_exacloud_path(path):
     return (path.replace("mnt/rose/shared", "home/exacloud/lustre1/fnl_lab")
             if "exa" in socket.gethostname() else 
             path.replace("home/exacloud/lustre1/fnl_lab", "mnt/rose/shared"))
-
+    
 
 def shuffle_out_subset_of(subset, to_shuffle_out, exclusive_pool):
     """
