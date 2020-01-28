@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-01-27
+Updated 2020-01-28
 """
 
 ##################################
@@ -105,11 +105,12 @@ def count_digits_of(a_num):
 def default_vis_titles():
     """
     :return: Dictionary mapping the keyword identifying each visualization to
-             the text to use as that visualization's titles
+             the text to use as that visualization's default title
     """
     return {"sub1_sub2": "Correlations Between Average Subsets",
             "sub1_all2": "Group 1 Subset to Group 2 Correlation",
-            "sub2_all1": "Group 1 to Group 2 Subset Correlation"}
+            "sub2_all1": "Group 1 to Group 2 Subset Correlation",
+            None: "Correlation Between Unknown Groups"}
 
 
 def drop_nan_rows_from(group, group_num, nan_threshold, parser):
@@ -595,7 +596,9 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             "-title",
             "--graph-title",
             help=("Include this argument with a custom title to show it at "
-                  "the top of the output visualizations. Otherwise, the ")
+                  "the top of the output visualizations. Otherwise, each "
+                  "visualization will have one of these default titles: {}"
+                  .format(", ".join(default_vis_titles().values())))
         )
 
     # Optional: Path to average matrix .pconn file for group 1
