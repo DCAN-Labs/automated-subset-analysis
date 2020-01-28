@@ -73,6 +73,7 @@ Most of the command-line arguments used by the scripts in this directory are the
 | `--columns`                | Optional | Optional | | Optional | Optional |
 | `--n-analyses`             | Optional | Optional | | Optional | Optional |
 | `--nan-threshold`          | Optional | Optional | | Optional | Optional |
+| `--no-matching`            | Optional | Optional | | Optional | Optional |
 | `--subset-size`            | Optional | Optional | | Optional | Optional |
 | `--continuous-variables`   | | Optional | | | |
 | `--example-file`           | | | Optional | Optional | | 
@@ -83,9 +84,11 @@ Most of the command-line arguments used by the scripts in this directory are the
 | `--group-1-avg-file`       | Optional | | Optional | Optional | Optional |
 | `--group-2-avg-file`       | Optional | | Optional | Optional | Optional |
 | `--axis-font-size`         | Optional | | | Optional | Optional |
-| `--dimensions`             | Optional | | | Optional | Optional |
 | `--euclidean`              | Optional | | | Optional | Optional |
 | `--fill`                   | Optional | | | Optional | Optional |
+| `--graph-title`            | Optional | | | Optional | Optional |
+| `--hide-legend`            | Optional | | | Optional | Optional |
+| `--marker-size`            | Optional | | | Optional | Optional |
 | `--title-font-size`        | Optional | | | Optional | Optional |
 | `--y-range`                | Optional | | | Optional | Optional |
 | `--only-make-graphs`       | Optional | | | | Optional |
@@ -93,7 +96,7 @@ Most of the command-line arguments used by the scripts in this directory are the
 | `--parallel`               | Optional<sup>1</sup> | | | | |
 | `--sbatch-string`          | | | | | *Required* |
 
-<sup>1</sup>The `--parallel` argument does not need to be used for `asa_submitter.py`, because that script will add it automatically when running `automated_subset_analysis.py`.
+<sup> 1 </sup>The `--parallel` flag probably never needs to be added by the user. `asa_submitter.py` will add it automatically when running `automated_subset_analysis.py` batch jobs, and that is the flag's only intended use.
 
 ### Arguments for Other Scripts
 
@@ -146,4 +149,4 @@ Each instance will append its output correlations to 3 `.csv` files in the `--ou
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-12-16
-- Updated by Greg Conan, 2020-01-08
+- Updated by Greg Conan, 2020-01-28

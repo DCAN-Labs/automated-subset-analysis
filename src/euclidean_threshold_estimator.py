@@ -4,7 +4,7 @@
 Euclidean distance threshold finder for automated_subset_analysis.py
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Last Updated 2019-12-13
+Updated 2020-01-28
 """
 
 ##################################
@@ -26,7 +26,8 @@ import scipy
 
 # Constants
 ARG_NAMES = ["group_1_demo_file", "group_2_demo_file", "columns", "n_analyses", 
-             "nan_threshold", "output", "subset_size", "continuous_variables"]
+             "nan_threshold", "output", "subset_size", "continuous_variables",
+             "no_matching"]
 FREQ_COL_NAMES = ["Group", "Subjects", "Euclidean Distance"]
 PWD = get_pwd()
 
