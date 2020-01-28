@@ -1156,7 +1156,7 @@ def valid_conc_file(path):
     try:
         assert os.path.splitext(path)[1] == ".conc"
         return valid_readable_file(path)
-    except (AssertionError, OSError, TypeError):
+    except (AssertionError, OSError, TypeError, argparse.ArgumentTypeError):
         raise argparse.ArgumentTypeError("{} is not a .conc file".format(path))
 
 

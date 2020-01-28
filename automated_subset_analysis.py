@@ -538,8 +538,7 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     # Add upper & lower bounds (all data or confidence intervals) of shaded
     # area to plot as lines
     bounds = get_shaded_area_bounds(correls_df, cli_args.fill)
-    bounds_params = ({"showlegend": False} if cli_args.fill == "all"
-                     or cli_args.hide_legend else
+    bounds_params = ({"showlegend": False} if cli_args.fill == "all" else
                      {"name": "95% confidence interval", "showlegend": True})
     lower_plot = plotly.graph_objs.Scatter(
         x=avgs.index.values, y=bounds[0], fill="tonexty", line_color=clear, 
@@ -575,7 +574,8 @@ def get_layout_args(cli_args, correls_df, title, last_avg):
         correls_df["Correlation"].min(), correls_df["Correlation"].max()
     )
     return (y_axis_min, y_axis_max, title, last_avg, cli_args.title_font_size,
-            cli_args.axis_font_size, correls_df["Subjects"].mean())
+            cli_args.axis_font_size, correls_df["Subjects"].mean(),
+            not cli_args.hide_legend)
 
 
 def get_shaded_area_bounds(all_data_df, to_fill):
@@ -614,7 +614,7 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     return result
 
 
-def get_plot_layout(layout_args):
+def get_plot_layout(all_args):
     """
     Return all format settings for creating a pretty plot visualization.
     :param layout_args: Tuple of all arguments needed for visualization format
@@ -623,7 +623,7 @@ def get_plot_layout(layout_args):
     # Local variables from unpacked list of args to use in layout: 
     #   Lowest and highest y-values to show, graph title, last y-value to show,
     #   graph title and axis title font sizes, average subset size
-    y_min, y_max, title, last_y, title_size, axis_font, x_avg = layout_args
+    y_min, y_max, title, last_y, title_size, axis_font, x_avg, hide = all_args
 
     # Others: RGBA colors as well as space buffer above y_max and below y_min
     black = "rgb(0, 0, 0)"
@@ -648,7 +648,7 @@ def get_plot_layout(layout_args):
 
     return {"title": {"text": title, "x": 0.5, "xanchor": "center",
                       "font": {"size": title_size}},
-            "paper_bgcolor": white, "plot_bgcolor": white,
+            "paper_bgcolor": white, "plot_bgcolor": white, "showlegend": hide,
             "legend": {"font": {"size": axis_font}, "x": 0.5,
                        # Place the legend in white space away from the graph
                        "y": 0.9 if last_y < ((y_max + y_min) / 2) else 0.1},
