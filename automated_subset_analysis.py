@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-01-28
+Updated 2020-02-03
 """
 
 ##################################
@@ -150,6 +150,7 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
             parser.error(str(e))
         setattr(cli_args, "group_{}_avg".format(gp_num),
                 load_matrix_from(getattr(cli_args, group_avg_file_str)))
+
     return cli_args
 
 
@@ -235,11 +236,11 @@ def skip_subset_generation(cli_args, subsets_file_name):
 def is_subset_csv(path, subset_filename_parts, n_analyses):
     """
     Check if a path points to a subset .csv file made by this script within the
-    --n_analyses variable
+    --n-analyses variable
     :param path: String which should be a valid path to a readable file
     :param subsets_filename_parts: List of strings which each have part of the
                                    format of subset file names
-    :param n_analyses: Integer which is the --n_analyses argument value
+    :param n_analyses: Integer which is the --n-analyses argument value
     :return: True if path is to a readable .csv file following this script's 
              subset file naming conventions, where the analysis number <= 
              n_analyses, with two columns labeled '1' and '2'; otherwise False
@@ -264,13 +265,12 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     Randomly generate all pairs of subsets, save each of them to a .csv file,
     and then return dictionaries with pairs of subsets
     :param cli_args: argparse namespace with all command-line arguments. This
-                     function uses the --n_analyses, --output, & --subset_size 
+                     function uses the --n-analyses, --output, & --subset-size 
                      arguments; and passes cli_args to randomly_select_subset.
     :param subsets_file_name: String with the format of subset file names
     :return: List of dictionaries, each of which maps a subset's group number
              to the subset for one pair of subsets
     """
-   
     all_subsets = []                     # Return value: List of subsets
     progress = track_progress(cli_args)  # Track and estimate time taken
 
@@ -528,7 +528,7 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     # Get and display the visualization title, and averages
     vis_title = (cli_args.graph_title if cli_args.graph_title
                  else default_vis_titles()[corr_df_name])
-    vis_file = "".join(vis_title.split()) + ".html"
+    vis_file = "".join(vis_title.replace("<br>", "_").split()) + ".html"
     i = 1
     while os.access(vis_file, os.R_OK):
         i += 1

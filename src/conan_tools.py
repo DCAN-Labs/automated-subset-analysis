@@ -27,7 +27,6 @@ from scipy import stats
 from scipy.spatial import distance
 import socket
 import sys
-from timeit import Timer
 
 # Constants: Names of common automated_subset_analysis argparse parameters
 GP_AV_FILE = "group_{}_avg_file"
