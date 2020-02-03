@@ -4,7 +4,7 @@
 Euclidean distance threshold finder for automated_subset_analysis.py
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-01-28
+Updated 2020-02-03
 """
 
 ##################################
@@ -177,7 +177,7 @@ def loop_checker(loops, eu_dist, group_number, subset, diff_group,
 
     # If no match was found, print the next row of the table to the
     # command line for the user to track the script's progress
-    else: # if not loops % 10:
+    elif not loops % count_digits_of(loops):
         if col_widths:
             print(fit_strings_to_width((
                 loops, group_number, FLOAT_FORMAT.format(stat),
@@ -326,7 +326,7 @@ def get_logarithmic_fit(x, y):
     """
     coefs = np.polyfit(np.log(x), y, 1)
     return (lambda x: natural_log(x, coefs),
-            "{} * ln(x) + {}".format(coefs[0], coefs[1]))
+            "f(x) = {} * ln(x) + {}".format(coefs[0], coefs[1]))
 
 
 if __name__ == '__main__':

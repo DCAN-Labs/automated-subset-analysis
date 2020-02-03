@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-01-28
+Updated 2020-02-03
 """
 
 ##################################
@@ -34,6 +34,7 @@ GP_AV_FILE = "group_{}_avg_file"
 GP_DEMO_FILE = "group_{}_demo_file"
 GP_MTR_FILE = "matrices_conc_{}"
 EXAMPLE_FILE = "example_file"
+MATRIX_COL = "pconn10min"
 
 
 def add_default_avg_matr_path_to(cli_args, gp_num, parser, default):
@@ -255,7 +256,7 @@ def get_average_matrix(subset, paths_col, fisherz=None):
     return np.divide(running_total, divisor_matrix)
 
 
-def get_cli_args(script_description, arg_names, pwd, validate=None):
+def get_cli_args(script_description, arg_names, pwd, validate_fn=None):
     """
     Get and validate all args from command line using argparse.
     :param script_description: String describing the basic purpose of a script, 
@@ -264,16 +265,16 @@ def get_cli_args(script_description, arg_names, pwd, validate=None):
                       user can call the script with
     :param pwd: String which is a valid path to the parent directory of the
                 script currently being run
-    :param validate: Function to pass output namespace and its parser into to
-                     validate all user inputs
+    :param validate_fn: Function to pass output namespace and its parser into 
+                        to validate all user inputs
     :return: Namespace containing all validated inputted command line arguments
     """
     # Create arg parser, and fill it with parameters shared with other scripts
     parser = initialize_subset_analysis_parser(argparse.ArgumentParser(
         description=script_description
     ), pwd, arg_names)
-    return (validate(parser.parse_args(), parser)
-            if validate else parser.parse_args())
+    return (validate_fn(parser.parse_args(), parser)
+            if validate_fn else parser.parse_args())
 
 
 def get_confidence_interval(series, confidence=0.95):
@@ -1082,36 +1083,6 @@ def time_since(start_time):
     return now() - start_time
 
 
-def timeit_comparison(fns_dict, runs):
-    """
-    Given a dictionary of functions and their arguments, and a number of times 
-    to run them, print and return how long it takes to run them that many times
-    :param fns_dict: Dictionary mapping a function object to a list of values
-                     accepted by that function as arguments/parameters
-    :param runs: Integer which is the number of times to run each function
-    :return: Dictionary mapping the name of each function in fns_dict to how
-             long it took to run that function {runs} times
-    """
-    times = {}
-    for fn, fn_args in fns_dict.items():
-        times[fn.__name__] = timeit_fn(fn, runs, fn_args)
-    for fn_name, fn_time in times.items():
-        print("Time taken by function {}: {}".format(fn_name, fn_time))
-    return times
-
-
-def timeit_fn(fn, runs, fn_args):
-    """
-    Return how long it takes to run a function a given number of times
-    :param fn: Callable function object which accepts fn_args as parameters
-    :param runs: Integer which is the number of times to run fn
-    :param fn_args: List of arguments passed to fn
-    :return: Float which is how long it took to run fn(*fn_args) the number of 
-             times specified in the runs parameter
-    """
-    return Timer(lambda: fn(*fn_args)).timeit(runs)
-
-
 def track_progress(cli_args):
     """
     Initialize dictionary to track how long making average matrices will take
@@ -1152,11 +1123,8 @@ def valid_conc_file(path):
     :param path: String to check if it represents a valid filename
     :return: String representing a valid path to a readable .conc file
     """
-    try:
-        assert os.path.splitext(path)[1] == ".conc"
-        return valid_readable_file(path)
-    except (AssertionError, OSError, TypeError, argparse.ArgumentTypeError):
-        raise argparse.ArgumentTypeError("{} is not a .conc file".format(path))
+    return validate(path, lambda x: os.path.splitext(x)[1] == ".conc",
+                    valid_readable_file, "{} is not a .conc file.")
 
 
 def valid_output_dir(path):
@@ -1166,14 +1134,9 @@ def valid_output_dir(path):
     :param path: String which is a valid (not necessarily real) folder path
     :return: String which is a validated absolute path to real writeable folder
     """
-    try:
-        out_dir = os.path.abspath(path)
-        os.makedirs(out_dir, exist_ok=True)
-        assert os.access(out_dir, os.W_OK)
-        return out_dir
-    except (AssertionError, OSError, TypeError):
-        raise argparse.ArgumentTypeError("Cannot write to directory at {}"
-                                         .format(path))
+    return validate(path, lambda x: os.path.isdir(x) and os.access(x, os.W_OK),
+                    valid_readable_file, "Cannot create directory at {}", 
+                    lambda y: os.makedirs(y, exist_ok=True))
 
 
 def valid_readable_file(path):
@@ -1184,11 +1147,8 @@ def valid_readable_file(path):
     :param path: Parameter to check if it represents a valid filename
     :return: String representing a valid filename
     """
-    try:
-        assert os.access(path, os.R_OK)
-        return os.path.abspath(path) 
-    except (AssertionError, OSError, TypeError):
-        raise argparse.ArgumentTypeError("Cannot read file at {}".format(path))
+    return validate(path, lambda x: os.access(x, os.R_OK),
+                    os.path.abspath, "Cannot read file at {}")
 
 
 def valid_whole_number(to_validate):
@@ -1197,10 +1157,26 @@ def valid_whole_number(to_validate):
     :param to_validate: Object to test whether it is an integer greater than 0
     :return: to_validate if it is an integer greater than 0
     """
+    return validate(to_validate, lambda x: int(to_validate) > 0, int, 
+                    "{} is not a positive integer.")
+
+
+def validate(path, is_real, make_valid, err_msg, prepare=None):
+    """
+    Parent/base function used by different type validation functions. Raises an
+    argparse.ArgumentTypeError if the input path is somehow invalid.
+    :param path: String to check if it represents a valid path 
+    :param is_real: Function which returns true if and only if path is real
+    :param make_valid: Function which returns a fully validated path
+    :param err_msg: String to show to user to tell them what is invalid
+    :param prepare: Function to create something at path before validation
+    :return: path, but fully validated as pointing to the right file or dir
+    """
     try:
-        to_validate = int(to_validate)
-        assert to_validate > 0
-        return to_validate
-    except (AssertionError, TypeError):
-        raise argparse.ArgumentTypeError("{} is not a positive integer."
-                                         .format(to_validate))
+        if prepare:
+            prepare(path)
+        assert is_real(path)
+        return make_valid(path)
+    except (OSError, TypeError, AssertionError, ValueError, 
+            argparse.ArgumentTypeError):
+        raise argparse.ArgumentTypeError(err_msg.format(path))
