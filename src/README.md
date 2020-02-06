@@ -59,7 +59,6 @@ python3 ./make_average_and_subsets.py ../raw/group_1_demographics.csv ../raw/gro
 python3 ./asa_submitter.py ../raw/group_1_demographics.csv ../raw/group_2_demographics.csv --sbatch-string "sbatch --time=1:00:00 --cpus 1 -A my_group ./automated_subset_analysis.py" --output ./data/ --n-analyses 5 --subset-size 50 100 200 
 ```
 
-
 ## Command-Line Arguments
 
 Most of the command-line arguments used by the scripts in this directory are the same as those used by `automated_subset_analysis.py`, and work in the same way. However, each script accepts a different combination of those arguments, shown in the chart below. There are also two flags accepted by scripts in this directory but not by `automated_subset_analysis.py`, which are described below the combinations chart.
@@ -84,6 +83,7 @@ Most of the command-line arguments used by the scripts in this directory are the
 | `--group-1-avg-file`       | Optional | | Optional | Optional | Optional |
 | `--group-2-avg-file`       | Optional | | Optional | Optional | Optional |
 | `--axis-font-size`         | Optional | | | Optional | Optional |
+| `--correlate-variances`    | Optional | | | Optional | Optional |
 | `--euclidean`              | Optional | | | Optional | Optional |
 | `--fill`                   | Optional | | | Optional | Optional |
 | `--graph-title`            | Optional | | | Optional | Optional |
@@ -149,4 +149,4 @@ Each instance will append its output correlations to 3 `.csv` files in the `--ou
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-12-16
-- Updated by Greg Conan, 2020-01-28
+- Updated by Greg Conan, 2020-02-06

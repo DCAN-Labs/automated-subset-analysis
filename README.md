@@ -42,9 +42,9 @@ csv2=/home/user/conan/data/group2_pconn.csv
 python3 automated_subset_analysis.py ${csv1} ${csv2}
 ```
 
-### Optional Arguments (20)
+### Optional Arguments (21)
 
-#### File Paths with Default Values
+#### File Paths with Default Values (5)
 
 1. `--group-1-avg-file` takes one valid path to a readable `.nii` file containing the average matrix for the entire group 1. By default, this path will be to the `group1_10min_mean.pconn.nii` file in this script's parent folder or in the `--output` folder.
 
@@ -56,7 +56,7 @@ python3 automated_subset_analysis.py ${csv1} ${csv2}
 
 1. `--output` takes one file path to a directory where all files produced by this script will be saved. If the directory already exists, then this script will add files to it and only overwrite files with conflicting filenames. If not, then this script will create a directory at the `--output` path. If this flag is excluded, then the script will save files to a new subdirectory of the present working directory, `./data/`.
 
-#### Numerical Values for Data Processing
+#### Numerical Values for Data Processing (3)
 
 1. `--n-analyses` takes one positive integer, the number of times to generate a pair of subsets and analyze them. For every integer given in the `--subset-size` list, this script will randomly generate `--n-analyses` subsets, creating `--subset-size * --n-analyses` total `.csv` files.
 
@@ -64,7 +64,7 @@ python3 automated_subset_analysis.py ${csv1} ${csv2}
 
 1. `--subset-size` takes one or more positive integers, the number of subjects to include in subsets. Include a list of whole numbers to generate subsets pairs of different sizes. By default, the subset sizes will be `[50, 100, 200, 300]`. An example of entering a different list of sizes is `--subset-size 100 300 500 1000`.
 
-#### Flags to Skip Steps of Process
+#### Flags to Skip Steps of Process (2)
 
 1. `--only-make-graphs` takes one or more paths to readable `.csv` files as a parameter. Include this flag to import average correlations data from `.csv` files instead of making any new ones. Given this flag, `automated_subset_analysis.py` only makes graph visualizations of already-existing data.
 
@@ -78,7 +78,7 @@ python3 automated_subset_analysis.py ${csv1} ${csv2}
 - If `--only-make-graphs` is included, then `--skip-subset-generation` will do nothing.
 - Unless the `--only-make-graphs` flag is used, the `.csv` file(s) with subsets' average correlations will/must be called `correlations_sub1_sub2.csv`, `correlations_sub1_all2.csv`, and/or `correlations_sub2_all1.csv`.
 
-#### Visualization Formatting Arguments
+#### Visualization Formatting Arguments (7)
 
 1. `--axis-font-size` takes one positive integer, the font size of the text on both axes of the visualizations that this script will create. If this argument is excluded, then by default, the font size will be `30`.
 
@@ -98,12 +98,14 @@ python3 automated_subset_analysis.py ${csv1} ${csv2}
 
 1. `--y-range` takes two floating-point numbers, the minimum and maximum values to be displayed on the y-axis of the graph visualizations that this script will create. By default, this script will automatically set the y-axis boundaries to show all of the correlation values and nothing else.
 
-#### Other Flags
+#### Other Flags (5)
 
 1. `--columns` takes one or more strings. Each should be the name of a column in the demographics `.csv` which contains numerical data to include in the subset correlations analysis. By default, the script will assume that both input demographics `.csv` files have columns of numerical data with these names:
     ```
     demo_comb_income_v2b, demo_ed_v2, demo_prnt_ed_v2b, demo_sex_v2b, ehi_y_ss_scoreb interview_age, medhx_9a, race_ethnicity, rel_relationship, site_id_l
     ```
+
+1. `--correlate-variances` takes no parameters. By default, subset analysis will calculate correlations between subsets'/groups' average values. Include this flag to correlate the subsets' variances instead.
 
 1. `--inverse-fisher-z` takes no parameters. Include this flag to do an inverse Fisher-Z transformation on the matrices imported from the `.pconn` files of the data before getting correlations.
 
@@ -160,4 +162,4 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Updated by Greg Conan, 2020-01-28
+- Updated by Greg Conan, 2020-02-06

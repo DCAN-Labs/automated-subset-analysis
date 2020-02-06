@@ -209,12 +209,12 @@ def get_ASA_arg_names():
              automated_subset_analysis.py as a cli_args argparse parameter
     """
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
-            "columns", "euclidean", "fill", GP_AV_FILE.format(1),
-            GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
-            "hide_legend", "marker_size", "n_analyses", "nan_threshold",
-            "no_matching", "only_make_graphs", "output", "parallel", 
-            "skip_subset_generation", "subset_size", "graph_title", 
-            "title_font_size", "y_range", "inverse_fisher_z"]
+            "columns", "correlate_variances", "euclidean", "fill", 
+            GP_AV_FILE.format(1), GP_AV_FILE.format(2), GP_MTR_FILE.format(1),
+            GP_MTR_FILE.format(2), "hide_legend", "marker_size", "n_analyses",
+            "nan_threshold", "no_matching", "only_make_graphs", "output", 
+            "parallel", "skip_subset_generation", "subset_size", 
+            "graph_title", "title_font_size", "y_range", "inverse_fisher_z"]
 
 
 def get_average_matrix(subset, paths_col, fisherz=None):
@@ -302,6 +302,18 @@ def get_family_info(subject, family_vars):
              the variable by that name in subject
     """
     return {prop: int(subject[prop]) for prop in family_vars}
+
+
+def get_group_avgs_or_vars(group, columns, corr_vars):
+    """
+    :param group: pandas.DataFrame with some columns of numeric data
+    :param columns: pandas.Series with strings naming group's numeric columns
+    :param corr_vars: Boolean which, if True, will make this function return
+                      averages; and if False, will make it return variances
+    """
+    mean_or_var = (lambda x: x.var(skipna=True) if corr_vars
+                   else x.mean(skipna=True))
+    return [mean_or_var(group[col]) for col in columns.columns.tolist()]
 
 
 def get_group_demographics(cli_args, gp_num, gp_demo_str, parser):
@@ -546,6 +558,17 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=default_continuous_vars,
             help=("All names of columns in the demographics .csv file which "
                   "have continuous instead of categorical data.")
+        )
+
+    def correlate_variances():
+        parser.add_argument(
+            "-cor-var",
+            "--correlate-variances",
+            action="store_true",
+            help=("By default, subset analysis will calculate correlations "
+                  "between subsets' average values. Include this flag to "
+                  "correlate the subsets' variances instead.")
+
         )
 
     # Optional: Custom logarithmic function for Euclidean distance threshold
@@ -980,9 +1003,9 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
     columns = group.select_dtypes(include=["number"]).drop([
         "GROUP", "rel_family_id"
     ], axis="columns")
-    group_avgs = [diff_group[col].mean(skipna=True)
-                  for col in columns.columns.tolist()]
-
+    group_avgs = get_group_avgs_or_vars(diff_group, columns, 
+                                        cli_args.correlate_variances)
+    
     # Randomly pick subsets until finding 1 that demographically represents    
     # the overall group    
     loops = 0
@@ -994,8 +1017,8 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
         # Generate subset of group and get its columns' averages as a list
         subset = (group.sample(n=sub_n) if cli_args.no_matching
                   else get_subset_of(group, sub_n))
-        sub_avgs = [subset[col].mean(skipna=True)
-                    for col in columns.columns.tolist()]
+        sub_avgs = get_group_avgs_or_vars(subset, columns,
+                                          cli_args.correlate_variances)
 
         # If any column in subset averages has mean of N/A, throw it out
         if any(np.isnan(el) for el in sub_avgs):
