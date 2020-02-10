@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-02-03
+Updated 2020-02-06
 """
 
 ##################################
@@ -566,8 +566,8 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             "--correlate-variances",
             action="store_true",
             help=("By default, subset analysis will calculate correlations "
-                  "between subsets' average values. Include this flag to "
-                  "correlate the subsets' variances instead.")
+                  "between subsets'/groups' average values. Include this "
+                  "flag to correlate the subsets' variances instead.")
 
         )
 

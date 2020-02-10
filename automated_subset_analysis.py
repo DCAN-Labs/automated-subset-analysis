@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-02-03
+Updated 2020-02-10
 """
 
 ##################################
@@ -70,12 +70,12 @@ def main():
                         else save_and_get_all_subsets)
             all_subsets = get_subs(cli_args, "subset_{}_with_{}_subjects.csv")
 
-            # Move to output directory and then make visualizations of
-            # all subset correlations
-            chdir_to(cli_args.output)
-            for correls_df_name, correls_df in get_correl_dataframes(
-                    all_subsets, cli_args).items():
-                make_visualization(correls_df, cli_args, correls_df_name)
+            # Go to output dir to make visualizations of subset correlations
+            if not cli_args.parallel:
+                chdir_to(cli_args.output)
+                for correls_df_name, correls_df in get_correl_dataframes(
+                        all_subsets, cli_args).items():
+                    make_visualization(correls_df, cli_args, correls_df_name)
 
     except Exception as e:
         get_and_print_timestamp_when(sys.argv[0], "crashed")
