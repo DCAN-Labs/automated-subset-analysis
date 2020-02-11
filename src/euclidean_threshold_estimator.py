@@ -4,7 +4,7 @@
 Euclidean distance threshold finder for automated_subset_analysis.py
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-02-03
+Updated 2020-02-11
 """
 
 ##################################
@@ -27,13 +27,12 @@ import scipy
 # Constants
 ARG_NAMES = ["group_1_demo_file", "group_2_demo_file", "columns", "n_analyses", 
              "nan_threshold", "output", "subset_size", "continuous_variables",
-             "no_matching"]
+             "correlate_variances", "no_matching"]
 FREQ_COL_NAMES = ["Group", "Subjects", "Euclidean Distance"]
 PWD = get_pwd()
 
 
 def main():
-
     # Store and print the date and time when this script started running
     starting_timestamp = get_and_print_timestamp_when(sys.argv[0], "started")
 
@@ -111,7 +110,7 @@ def do_all_freq_analyses(cli_args, freq_cols):
                                                    ).to_string(index=False)))
 
     # Run the number of analyses in --n_analyses for each subset size given
-    progress = track_progress(cli_args)
+    progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
     for subset_size in cli_args.subset_size:
         print("Running {} analyses of randomly selected groups of {} subjects."
               .format(cli_args.n_analyses, subset_size))

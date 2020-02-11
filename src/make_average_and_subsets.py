@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 """
+Combination average matrix maker and subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2019-12-12
 Last Updated 2020-01-08
@@ -36,11 +37,9 @@ def main():
             arg_names, PWD
         ))
 
-        # Get average matrix paths
+        # Make average matrices for each whole group
         for gp_num in (1, 2):
             cli_args = add_default_avg_matr_path_to(cli_args, gp_num)
-
-        # Make average matrices for each entire group
         run_ASA_or_MAM_script(
             os.path.join(PWD, "make_average_matrix.py"),
             ("matrices_conc_1", "matrices_conc_2", "group_1_avg_file",
@@ -57,20 +56,21 @@ def main():
                               asa_args, make_avg_paths_absolute(cli_args))
 
         get_and_print_timestamp_when(sys.argv[0], "finished")
-
     except Exception as e:
         get_and_print_timestamp_when(sys.argv[0], "crashed")
         raise e
 
 
 def make_avg_paths_absolute(cli_args):
-    # Validate that average matrix file arguments are absolute paths
+    """
+    Validate that average matrix file arguments are absolute paths
+    """
     for gp_num in (1, 2):
-        avg_matr = "group_{}_avg_file".format(gp_num)
-        avg_matr_path = getattr(cli_args, avg_matr, None)
-        if avg_matr_path:
-            setattr(cli_args, avg_matr, os.path.join(cli_args.output,
-                                                     avg_matr_path))
+        avg_matrix = "group_{}_avg_file".format(gp_num)
+        avg_matrix_path = getattr(cli_args, avg_matrix, None)
+        if avg_matrix_path and not os.path.isabs(avg_matrix_path):
+            setattr(cli_args, avg_matrix, os.path.join(cli_args.output,
+                                                       avg_matrix_path))
     return cli_args
 
 

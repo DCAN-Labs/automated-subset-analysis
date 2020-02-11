@@ -1105,15 +1105,18 @@ def time_since(start_time):
     return now() - start_time
 
 
-def track_progress(cli_args):
+def track_progress(n_analyses, subset_sizes):
     """
+    :param n_analyses: Integer, how many times to analyze each subset size
+    :param subset_sizes: List of integers, each of which counts matrices to be
+                         analyzed in each subset iteration
     Initialize dictionary to track how long making average matrices will take
     :return: Dictionary tracking progress so far, with 3 string:integer pairs
         {"matrices_left":  Matrices left to make at some point in the process
          "total_matrices": Matrices to make, total
          "seconds_taken": Seconds the script spent making matrices so far}
     """
-    matrices_to_do = cli_args.n_analyses * sum(cli_args.subset_size)
+    matrices_to_do = n_analyses * sum(subset_sizes)
     return {"total_matrices": matrices_to_do, "matrices_left": matrices_to_do,
             "seconds_taken": 0}
 

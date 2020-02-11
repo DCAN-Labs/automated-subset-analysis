@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-02-10
+Updated 2020-02-11
 """
 
 ##################################
@@ -271,8 +271,8 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     :return: List of dictionaries, each of which maps a subset's group number
              to the subset for one pair of subsets
     """
-    all_subsets = []                     # Return value: List of subsets
-    progress = track_progress(cli_args)  # Track and estimate time taken
+    all_subsets = []  # Return value: List of subsets
+    progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
 
     # Get average correlation from user-defined number of pairs of average
     # matrices of randomly generated subsets
@@ -375,7 +375,7 @@ def get_correl_dataframes(all_subsets, cli_args):
                     default_vis_titles().keys() if subset_id}
 
     # Keep track of how long this function takes, to show the user during loop
-    progress = track_progress(cli_args)
+    progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
 
     # Get each pair of average matrices, their correlation with each other, and
     # each one's correlation with the other group's average matrix

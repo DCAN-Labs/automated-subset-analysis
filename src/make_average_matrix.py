@@ -26,6 +26,7 @@ import sys
 
 # Constants
 PWD = get_pwd()
+DEFAULT_DEM_VAR_PCONNS = "pconn10min"
 
 
 def main():
@@ -139,7 +140,9 @@ def save_to_cifti2(avg_matrix, cli_args, gp_num):
     )
 
     # Get the file path to save the average matrix into
-    cli_args = add_default_avg_matr_path_to(cli_args, gp_num)
+    cli_args = add_default_avg_matr_path_to(cli_args, gp_num,
+                                            argparse.ArgumentParser(),
+                                            DEFAULT_DEM_VAR_PCONNS)
     avg_matr = getattr(cli_args, "group_{}_avg_file".format(gp_num))
 
     # Save the average matrix file
