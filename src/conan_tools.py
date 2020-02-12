@@ -347,10 +347,7 @@ def get_pwd():
     :return: String which is a valid path to the directory containing the file
              which is currently being run
     """
-    try:
-        pwd = os.path.dirname(os.path.abspath(sys.argv[0]))
-    except OSError:
-        pwd = os.getcwd()
+    pwd = os.path.dirname(os.path.abspath(sys.argv[0]))
     print("Running {} while in directory {}".format(sys.argv[0], pwd))
     return pwd
 

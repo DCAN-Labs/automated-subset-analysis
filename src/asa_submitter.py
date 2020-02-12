@@ -4,13 +4,13 @@
 SBATCH job submitter for automated subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2020-01-03
-Updated 2020-02-11
+Updated 2020-02-12
 """
 
 ##################################
 #
-# Script to submit a SBATCH job, running many instances of
-# automated_subset_analysis.py, for parallel processing on Exacloud
+# Script to submit many automated_subset_analysis.py SBATCH jobs for parallel
+# processing on the Exacloud server
 #
 ##################################
 
@@ -22,9 +22,10 @@ from src.conan_tools import *
 import subprocess
 import time
 
-# Constant: Directory holding automated_subset_analysis.py file
+# Constants: Demographics and job argument names, automated_subset_analysis dir
+GP_DEMO_FILE = "group_{}_demo_file"
+JOB_SHORTNAME = "ASA_GREG"
 PWD = get_pwd()
-
 
 def main():
 
@@ -37,8 +38,12 @@ def main():
          "parallel."), get_ASA_arg_names(), PWD
     )
 
+    cli_args["sbatch"] = ["sbatch", "--time={}".format(cli_args["time"]), 
+                          "--mem=1gb", "-c", "1", "-A", "fnl_lab",
+                          os.path.join(PWD, "automated_subset_analysis.py")]
+
     try:
-        submit_batch_job(cli_args)
+        submit_batch_jobs(cli_args)
         
     except Exception as e:
         get_and_print_timestamp_when(sys.argv[0], "crashed")
@@ -70,29 +75,30 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
     # This block differs from conan_tools.get_cli_args by adding a new 
     # argument and converting cli_args into a dictionary
     default_jobs = 100
-    default_seconds = 10
+    default_time_limit = "04:00:00"
     parser.add_argument(
-        "-sbatch",
-        "--sbatch-string",
-        required=True,
-        help=("String with all of the required parameters to run an SBATCH "
-              "command. All other input arguments will be appended to this "
-              "string, and then the result will be executed. This flag must "
-              "be included with a command to run.")
+        "-q", "-queue",
+        "--queue-max-size",
+        type=valid_whole_number,
+        default=default_jobs,
+        help=("The maximum number of jobs to run simultaneously. By default, "
+              "a maximum of {} jobs will run at once.".format(default_jobs))
     )
     parser.add_argument(
-        "-seconds",
-        "--seconds-to-wait",
-        type=valid_whole_number,
-        help=("Waiting period between batch job submissions by this script. "
-              "Enter the number of seconds to wait, after submitting one "
-              "job, to submit the next job. By default, this script will "
-              "wait {} seconds.".format(default_seconds))
+        "-time",
+        "--job-time-limit",
+        dest="time",
+        type=valid_time_str,
+        default=default_time_limit,
+        help=("Time limit for each automated_subset_analysis batch job. The "
+              "time limit must be formatted specifically as HH:MM:SS where HH "
+              "is hours, MM is minutes, and SS is seconds. {} is the default "
+              "time limit.".format(default_time_limit))
     )
     parser.add_argument(
         "-print-cmd",
         "--print-command",
-        type="store_true",
+        action="store_true",
         help=("Include this flag to print every command that is run to submit "
               "an automated_subset_analysis.py batch job.")
     )
@@ -108,7 +114,7 @@ def get_asa_options(cli_args):
     """
     asa_optional_args = []
     for arg in get_ASA_arg_names():
-        if arg not in (gp_demo.format(1), gp_demo.format(2),
+        if arg not in (GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2),
                        "n_analyses", "output", "subset_size"):
             if cli_args[arg]:
                 asa_optional_args.append(as_cli_arg(arg))
@@ -120,46 +126,71 @@ def get_asa_options(cli_args):
     return asa_optional_args
 
 
-def submit_batch_job(cli_args):
+def valid_time_str(in_arg):
     """
-    Submit batch job to run automated_subset_analysis in parallel
+    :param in_arg: Object to check if it's a time string in the right format
+    :return: True if in_arg is a string representing a time limit in the format
+             HH:MM:SS; otherwise False
+    """
+    try:
+        split = in_arg.split(":")
+        assert len(split) == 3
+        for each_num in split:
+            assert each_num.isdigit()
+            valid_whole_number(each_num)
+    except (TypeError, AssertionError, ValueError):
+        raise argparse.ArgumentTypeError("Invalid time string.")
+
+
+def count_jobs_running():
+    """
+    :return: Integer counting how many ASA batch jobs are running right now
+    """
+    return subprocess.check_output("squeue", universal_newlines=True
+                                   ).count(JOB_SHORTNAME)
+
+
+def get_batch_command(cli_args, out_num, subset_size):
+    """
+    Get command to run automated_subset_analysis batch job
+    :param cli_args: argparse namespace with all validated command-line
+                     arguments, all of which are used by this function
+    :param out_num: Integer from 1 to cli_args["n_analyses"] representing which
+                    analysis this batch command is
+    :param subset_size: Integer which is an element of cli_args["subset_size"]
+    :return: List of strings which can be called as a command to run an
+             automated_subset_analysis batch job
+    """
+    return (cli_args["sbatch"] + [
+        cli_args[GP_DEMO_FILE.format(1)],
+        cli_args[GP_DEMO_FILE.format(2)],
+        "--output",
+        os.path.join(cli_args["output"],"output{}".format(out_num)),
+        "--n-analyses", "1",
+        "--parallel", PWD,
+        "--subset-size", str(subset_size)
+    ] + get_asa_options(cli_args))
+
+
+def submit_batch_jobs(cli_args):
+    """
+    Submit automated_subset_analysis batch jobs to run in parallel
     :param cli_args: argparse namespace with all validated command-line
                      arguments, all of which are used by this function
     :return: N/A
-    """
-    gp_demo = "group_{}_demo_file"                # ASA required args
-    asa_optional_args = get_asa_options(cli_args) # Some ASA optional args
+    """   
+    all_jobs_subset_sizes = cli_args["subset_size"] * cli_args["n_analyses"]
+    keep_adding_jobs = True
+    out_num = 1
+    while keep_adding_jobs and all_jobs_subset_sizes:
+        subprocess.check_call(get_batch_command(
+            cli_args, out_num, all_jobs_subset_sizes.pop()
+        ))
+        time.sleep(30)  # Wait 30 seconds before checking queue again
+        keep_adding_jobs = count_jobs_running() < cli_args["queue_max_size"]
+        if all_jobs_subset_sizes[-1] == cli_args["subset_size"][-1]:
+            out_num += 1
 
-    # Track how long submission took so far to estimate how long it will take
-    progress = track_progress(cli_args.n_analyses, len(cli_args.subset_size))
-    start_time = now()
 
-    # Call batch command with all needed parameters for SBATCH command and 
-    # automated_subset_analysis call
-    for i in range(1, cli_args["n_analyses"] + 1):
-        for subset_size in cli_args["subset_size"]:
-
-            # Command to run automated_subset_analysis batch job
-            cmd = (cli_args["sbatch_string"].split(" ") + [
-                cli_args[gp_demo.format(1)],
-                cli_args[gp_demo.format(2)],
-                "--output",
-                os.path.join(cli_args["output"], "output{}".format(i)),
-                "--n-analyses", "1",
-                "--parallel", PWD,
-                "--subset-size", str(subset_size)
-            ] + asa_optional_args)
-            
-            # Print information to inform user about process progress
-            update_progress(progress,
-                            "submitting automated_subset_analysis batch jobs",
-                            1, start_time)
-            if cli_args.print_command:
-                print("Running {}".format(cmd))
-
-            # Call command and wait before printing the next one
-            subprocess.check_call(cmd)
-            time.sleep(cli_args.seconds_to_wait)
-        
 if __name__ == "__main__":
     main()
