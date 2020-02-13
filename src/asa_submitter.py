@@ -24,7 +24,7 @@ import time
 
 # Constants: Demographics and job argument names, automated_subset_analysis dir
 GP_DEMO_FILE = "group_{}_demo_file"
-JOB_SHORTNAME = "ASA_GREG"
+JOB_SHORTNAME = "automate"
 PWD = get_pwd()
 
 def main():
@@ -137,7 +137,8 @@ def valid_time_str(in_arg):
         assert len(split) == 3
         for each_num in split:
             assert each_num.isdigit()
-            valid_whole_number(each_num)
+            assert int(each_num) >= 0
+        return in_arg
     except (TypeError, AssertionError, ValueError):
         raise argparse.ArgumentTypeError("Invalid time string.")
 
@@ -181,15 +182,22 @@ def submit_batch_jobs(cli_args):
     """   
     all_jobs_subset_sizes = cli_args["subset_size"] * cli_args["n_analyses"]
     keep_adding_jobs = True
-    out_num = 1
-    while keep_adding_jobs and all_jobs_subset_sizes:
-        subprocess.check_call(get_batch_command(
-            cli_args, out_num, all_jobs_subset_sizes.pop()
-        ))
-        time.sleep(30)  # Wait 30 seconds before checking queue again
+    out_num = 0
+    while len(all_jobs_subset_sizes) > 0:
+        with open("./submissions.txt", "a+") as infile:  # TODO remove this print?
+            infile.write("keep_adding_jobs: {}, len(all_jobs_subset_sizes): "
+                         "{}, out_num: {}, running: {}, queue_max: {}\n"
+                         .format(keep_adding_jobs, len(all_jobs_subset_sizes),
+                                 out_num, count_jobs_running(),
+                                 cli_args["queue_max_size"]))
+        if keep_adding_jobs:
+            if all_jobs_subset_sizes[-1] == cli_args["subset_size"][-1]:
+                out_num += 1
+            subprocess.check_call(get_batch_command(
+                cli_args, out_num, all_jobs_subset_sizes.pop()
+            ))
+        time.sleep(60)  # Wait 1 minute before checking queue again
         keep_adding_jobs = count_jobs_running() < cli_args["queue_max_size"]
-        if all_jobs_subset_sizes[-1] == cli_args["subset_size"][-1]:
-            out_num += 1
 
 
 if __name__ == "__main__":

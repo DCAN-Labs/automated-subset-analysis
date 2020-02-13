@@ -422,8 +422,7 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
                    cli_args, "matrices_conc_{}".format(sub_num), None
                ) else DEFAULT_DEM_VAR_PCONNS) 
         print("Making average matrix for group {} subset.".format(sub_num))
-        avg_matrices[sub_num] = get_average_matrix(subset, col,
-                                                   cli_args.inverse_fisher_z)
+        avg_matrices[sub_num] = get_average_matrix(subset, col, cli_args)
         print("Group {} subset's average matrix: \n{}"
               .format(sub_num, avg_matrices[sub_num]))
     return avg_matrices

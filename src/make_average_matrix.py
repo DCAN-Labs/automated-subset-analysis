@@ -4,7 +4,7 @@
 Average matrix creation for automated subset analysis script
 Greg Conan: conan@ohsu.edu
 Created 2019-11-20
-Last Updated 2019-12-18
+Last Updated 2019-02-13
 """
 
 ##################################
@@ -50,7 +50,7 @@ def main():
         print("Making average matrix for group {}".format(group_num))
         save_to_cifti2(get_average_matrix(get_total_matrix_from_conc(
             cli_args, group_num, paths_col, "id_redcap"
-        ), paths_col), cli_args, group_num)
+        ), paths_col, cli_args), cli_args, group_num)
 
     # Print when this script started and finished
     print(starting_timestamp)

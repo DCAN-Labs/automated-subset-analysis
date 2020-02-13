@@ -1,10 +1,10 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
 
 """
 Euclidean distance threshold finder for automated_subset_analysis.py
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-02-11
+Updated 2020-02-13
 """
 
 ##################################

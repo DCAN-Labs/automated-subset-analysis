@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-02-06
+Updated 2020-02-13
 """
 
 ##################################
@@ -113,6 +113,24 @@ def default_vis_titles():
             None: "Correlation Between Unknown Groups"}
 
 
+def display_progress(subset, counter, just_printed):
+    """
+    Display progress averaging matrices to user <= 100 times
+    :param subset: pandas.DataFrame with a column of paths to matrix files
+    :param counter: Integer counting how many loops have been iterated through
+    :param just_printed: Integer counting how many times this function has
+                         already been called and printed its message
+    :return: just_printed, but incremented if it printed its message
+    """ 
+    percent_done = counter / subset_size
+    if (math.floor(100 * percent_done)
+            != math.floor((100 * just_printed - 1) / subset_size)):
+        print("Remaining matrices: {}. Progress: {:.1%} done."
+              .format(subset_size - counter, percent_done))
+        just_printed = counter + 1
+    return just_printed
+
+
 def drop_nan_rows_from(group, group_num, nan_threshold, parser):
     """
     Check how many rows have NaN values. If it's under the threshold,
@@ -217,15 +235,15 @@ def get_ASA_arg_names():
             "graph_title", "title_font_size", "y_range", "inverse_fisher_z"]
 
 
-def get_average_matrix(subset, paths_col, fisherz=None):
+def get_average_matrix(subset, paths_col, cli_args):
     """
     Build and return a matrix averaging over every matrix in the subset by
     adding every matrix to a running total (to avoid loading every matrix in 
     the subset into memory at once)
     :param subset: pandas.DataFrame with a column of paths to matrix files
     :param paths_col: String naming the column of paths to matrix files
-    :param fisherz: Object which is truthy to do an inverse Fisher-Z 
-                    transformation on the matrix data, or falsy not to
+    :param cli_args: argparse namespace with --fisher-z and
+                     --correlate-variances
     :return: numpy.ndarray averaging all of the subset's subjects' matrices
     """
     subset_size = len(subset.index)
@@ -233,26 +251,35 @@ def get_average_matrix(subset, paths_col, fisherz=None):
     # Get one matrix file to initialize the running total matrix
     subject_matrix_paths = subset[paths_col].iteritems()
     running_total = load_matrix_from(next(subject_matrix_paths)[1])
-
+                         
     # Iteratively add every matrix to the running total
     counter = 1  # (Manual counter because iteritems has no len)
     just_printed = 0
+    matrices = []  # Save each matrix to calculate variance after
     for subj in subject_matrix_paths:
         counter += 1
-        running_total = np.add(running_total, load_matrix_from(subj[1])) 
+        matrices.append(load_matrix_from(subj[1]))
+        running_total = np.add(running_total, matrices[-1]) 
+        just_printed = display_progress(subset, counter, just_printed)
 
-        # Display progress to user <= 100 times
-        percent_done = counter / subset_size
-        if (math.floor(100 * percent_done)
-                != math.floor((100 * just_printed - 1) / subset_size)):
-            print("Remaining matrices: {}. Progress: {:.1%} done."
-                  .format(subset_size - counter, percent_done))
-            just_printed = counter + 1
- 
-    # Divide running total matrix by number of matrices, then return it
+    # Divide running total matrix by number of matrices
     divisor_matrix = np.ndarray(running_total.shape)
     divisor_matrix.fill(subset_size)
-    return np.divide(running_total, divisor_matrix)
+    avg_matrix = np.divide(running_total, divisor_matrix)
+    
+    # If user asked to get variances instead of means, then get variances 
+    if cli_args.correlate_variances:
+        just_printed = 0
+        print("Getting average matrix variance.")
+        all_matrices = np.dstack(matrices)
+        for i in range(len(matrices)):
+            all_matrices[i] = np.subtract(avg_matrix, all_matrices[i])**2
+            just_printed = display_progress(subset, i, just_printed)
+        print("Avg matrix: {}".format(avg_matrix))  # TODO remove line
+        avg_matrix = np.divide(np.sum(all_matrices, axis=-1))
+        print("Variance matrix: {}".format(avg_matrix))  # TODO remove line
+        
+    return avg_matrix
 
 
 def get_cli_args(script_description, arg_names, pwd, validate_fn=None):
@@ -304,16 +331,13 @@ def get_family_info(subject, family_vars):
     return {prop: int(subject[prop]) for prop in family_vars}
 
 
-def get_group_avgs_or_vars(group, columns, corr_vars):
+def get_group_avgs_or_vars(group, columns):
     """
     :param group: pandas.DataFrame with some columns of numeric data
     :param columns: pandas.Series with strings naming group's numeric columns
-    :param corr_vars: Boolean which, if True, will make this function return
-                      averages; and if False, will make it return variances
+    :return: List of averages for each column
     """
-    mean_or_var = (lambda x: x.var(skipna=True) if corr_vars
-                   else x.mean(skipna=True))
-    return [mean_or_var(group[col]) for col in columns.columns.tolist()]
+    return [group[col].mean(skipna=True) for col in columns.columns.tolist()]
 
 
 def get_group_demographics(cli_args, gp_num, gp_demo_str, parser):
@@ -1000,8 +1024,7 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
     columns = group.select_dtypes(include=["number"]).drop([
         "GROUP", "rel_family_id"
     ], axis="columns")
-    group_avgs = get_group_avgs_or_vars(diff_group, columns, 
-                                        cli_args.correlate_variances)
+    group_avgs = get_group_avgs_or_vars(diff_group, columns)
     
     # Randomly pick subsets until finding 1 that demographically represents    
     # the overall group    
@@ -1014,8 +1037,7 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
         # Generate subset of group and get its columns' averages as a list
         subset = (group.sample(n=sub_n) if cli_args.no_matching
                   else get_subset_of(group, sub_n))
-        sub_avgs = get_group_avgs_or_vars(subset, columns,
-                                          cli_args.correlate_variances)
+        sub_avgs = get_group_avgs_or_vars(subset, columns)
 
         # If any column in subset averages has mean of N/A, throw it out
         if any(np.isnan(el) for el in sub_avgs):
