@@ -267,7 +267,8 @@ def get_average_matrix(subset, paths_col, cli_args):
     
     # Get variances instead of means if user asked for variances
     if cli_args.correlate_variances:
-        avg_matrix = get_variance_matrix(avg_matrix, matrices, subset_size)
+        avg_matrix = np.var(np.dstack(matrices), axis=-1)
+
     return avg_matrix
 
 
@@ -421,28 +422,6 @@ def get_subset_of(group, subset_size):
     collect_invalid_members_of(subset)
     return make_subset_valid(subs_missing_sibs, collect_invalid_members_of,
                              subset, group, FAMILY["REL"], ID, subset_size)
-
-
-def get_variance_matrix(avg_matrix, matrices, subset_size, show_progress=None):
-    """
-    :param avg_matrix: numpy.ndarray which is an average of many matrices
-    :param matrices: List of numpy.ndarrays which are all of those matrices
-    :param divisor: numpy.ndarray with the same dimensions as avg_matrix, with
-                    the number of matrices in every cell 
-    :param show_progress: Function accepting 2 integers, current index and 
-                          previously printed index, to show progress to user
-    :return: numpy.ndarray with the variances of every index in the matrices
-    """
-    all_matrices = np.dstack(matrices) 
-    just_printed = 0
-    for i in range(len(matrices)):  # [:, :, i] assumes all matrices are 2D
-        all_matrices[:, :, i] = np.square(np.subtract(
-            all_matrices[:, :, i], avg_matrix
-        ))
-        if show_progress:
-            just_printed = show_progress(i, just_printed)
-    return np.divide(np.sum(all_matrices, axis=-1),
-                     get_divisor_matrix(avg_matrix.shape, subset_size - 1))
 
 
 def get_which_str_in_filename(filename, possible_names):
