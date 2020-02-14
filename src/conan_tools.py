@@ -438,11 +438,11 @@ def get_variance_matrix(avg_matrix, matrices, subset_size, show_progress=None):
     for i in range(len(matrices)):  # [:, :, i] assumes all matrices are 2D
         all_matrices[:, :, i] = np.square(np.subtract(
             all_matrices[:, :, i], avg_matrix
-        )) / (subset_size - 1)
+        ))
         if show_progress:
             just_printed = show_progress(i, just_printed)
     return np.divide(np.sum(all_matrices, axis=-1),
-                     get_divisor_matrix(avg_matrix.shape, subset_size))
+                     get_divisor_matrix(avg_matrix.shape, subset_size - 1))
 
 
 def get_which_str_in_filename(filename, possible_names):
