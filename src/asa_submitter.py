@@ -75,7 +75,15 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
     # This block differs from conan_tools.get_cli_args by adding a new 
     # argument and converting cli_args into a dictionary
     default_jobs = 100
+    default_sleep = 60
     default_time_limit = "04:00:00"
+    parser.add_argument(
+        "-print-cmd",
+        "--print-command",
+        action="store_true",
+        help=("Include this flag to print every command that is run to submit "
+              "an automated_subset_analysis.py batch job.")
+    )
     parser.add_argument(
         "-q", "-queue",
         "--queue-max-size",
@@ -83,6 +91,15 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
         default=default_jobs,
         help=("The maximum number of jobs to run simultaneously. By default, "
               "a maximum of {} jobs will run at once.".format(default_jobs))
+    )
+    parser.add_argument(
+        "-sleep",
+        "--seconds-between-jobs",
+        dest="sleep",
+        type=valid_whole_number,
+        default=default_sleep,
+        help=("Number of seconds to wait between batch job submissions. The "
+              "default number is {}.".format(default_sleep))
     )
     parser.add_argument(
         "-time",
@@ -94,13 +111,6 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
               "time limit must be formatted specifically as HH:MM:SS where HH "
               "is hours, MM is minutes, and SS is seconds. {} is the default "
               "time limit.".format(default_time_limit))
-    )
-    parser.add_argument(
-        "-print-cmd",
-        "--print-command",
-        action="store_true",
-        help=("Include this flag to print every command that is run to submit "
-              "an automated_subset_analysis.py batch job.")
     )
     return vars(validate(parser.parse_args(), parser)
                 if validate else parser.parse_args())
@@ -196,7 +206,7 @@ def submit_batch_jobs(cli_args):
             subprocess.check_call(get_batch_command(
                 cli_args, out_num, all_jobs_subset_sizes.pop()
             ))
-        time.sleep(60)  # Wait 1 minute before checking queue again
+        time.sleep(cli_args["sleep"])
         keep_adding_jobs = count_jobs_running() < cli_args["queue_max_size"]
 
 

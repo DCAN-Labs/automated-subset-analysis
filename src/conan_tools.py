@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-02-13
+Updated 2020-02-14
 """
 
 ##################################
@@ -113,7 +113,7 @@ def default_vis_titles():
             None: "Correlation Between Unknown Groups"}
 
 
-def display_progress(subset, counter, just_printed):
+def display_progress(subset, counter, subset_size, just_printed):
     """
     Display progress averaging matrices to user <= 100 times
     :param subset: pandas.DataFrame with a column of paths to matrix files
@@ -248,19 +248,18 @@ def get_average_matrix(subset, paths_col, cli_args):
     """
     subset_size = len(subset.index)
 
-    # Get one matrix file to initialize the running total matrix
+    # Get one matrix file to initialize the running total matrix & matrix list
     subject_matrix_paths = subset[paths_col].iteritems()
     running_total = load_matrix_from(next(subject_matrix_paths)[1])
-                         
+    matrices = [running_total] 
+
     # Iteratively add every matrix to the running total
-    counter = 1  # (Manual counter because iteritems has no len)
     just_printed = 0
-    matrices = []  # Save each matrix to calculate variance after
     for subj in subject_matrix_paths:
-        counter += 1
         matrices.append(load_matrix_from(subj[1]))
         running_total = np.add(running_total, matrices[-1]) 
-        just_printed = display_progress(subset, counter, just_printed)
+        just_printed = display_progress(subset, len(matrices), subset_size,
+                                        just_printed)
 
     # Divide running total matrix by number of matrices
     divisor_matrix = np.ndarray(running_total.shape)
@@ -269,17 +268,28 @@ def get_average_matrix(subset, paths_col, cli_args):
     
     # If user asked to get variances instead of means, then get variances 
     if cli_args.correlate_variances:
-        just_printed = 0
-        print("Getting average matrix variance.")
-        all_matrices = np.dstack(matrices)
-        for i in range(len(matrices)):
-            all_matrices[i] = np.subtract(avg_matrix, all_matrices[i])**2
-            just_printed = display_progress(subset, i, just_printed)
-        print("Avg matrix: {}".format(avg_matrix))  # TODO remove line
-        avg_matrix = np.divide(np.sum(all_matrices, axis=-1))
-        print("Variance matrix: {}".format(avg_matrix))  # TODO remove line
-        
+        avg_matrix = get_variance_matrix(avg_matrix, matrices, divisor_matrix)
     return avg_matrix
+
+
+def get_variance_matrix(avg_matrix, matrices, divisor, show_progress=None):
+    """
+    :param avg_matrix: numpy.ndarray which is an average of many matrices
+    :param matrices: List of numpy.ndarrays which are all of those matrices
+    :param divisor: numpy.ndarray with the same dimensions as avg_matrix, with
+                    the number of matrices in every cell 
+    :param show_progress: Function accepting 2 integers, current index and 
+                          previously printed index, to show progress to user
+    :return: numpy.ndarray with the variances of every index in the matrices
+    """
+    all_matrices = np.dstack(matrices) 
+    just_printed = 0
+    for i in range(len(matrices)):  # [:, :, i] assumes all matrices are 2D
+        all_matrices[:, :, i] = np.square(np.subtract(avg_matrix,
+                                                      all_matrices[:, :, i]))
+        if show_progress:
+            just_printed = show_progress(i, just_printed)
+    return np.divide(np.sum(all_matrices, axis=-1), divisor)
 
 
 def get_cli_args(script_description, arg_names, pwd, validate_fn=None):
@@ -1224,3 +1234,4 @@ def validate(path, is_real, make_valid, err_msg, prepare=None):
     except (OSError, TypeError, AssertionError, ValueError, 
             argparse.ArgumentTypeError):
         raise argparse.ArgumentTypeError(err_msg.format(path))
+

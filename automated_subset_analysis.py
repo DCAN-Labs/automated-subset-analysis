@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-02-11
+Updated 2020-02-14
 """
 
 ##################################
@@ -73,13 +73,14 @@ def main():
             # Go to output dir to make visualizations of subset correlations
             if not cli_args.parallel:
                 chdir_to(cli_args.output)
-                for correls_df_name, correls_df in get_correl_dataframes(
-                        all_subsets, cli_args).items():
+            for correls_df_name, correls_df in get_correl_dataframes(
+                    all_subsets, cli_args).items():
+                if not cli_args.parallel:
                     make_visualization(correls_df, cli_args, correls_df_name)
 
     except Exception as e:
         get_and_print_timestamp_when(sys.argv[0], "crashed")
-        sys.exit(e)
+        raise e
 
     # Print the date and time when this script started and finished running
     print(starting_timestamp)
@@ -150,7 +151,6 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
             parser.error(str(e))
         setattr(cli_args, "group_{}_avg".format(gp_num),
                 load_matrix_from(getattr(cli_args, group_avg_file_str)))
-
     return cli_args
 
 
@@ -663,3 +663,4 @@ def get_plot_layout(all_args):
 
 if __name__ == '__main__':
     main()
+
