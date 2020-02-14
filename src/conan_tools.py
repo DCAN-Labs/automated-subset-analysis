@@ -251,7 +251,7 @@ def get_average_matrix(subset, paths_col, cli_args):
     # Get one matrix file to initialize the running total matrix & matrix list
     subject_matrix_paths = subset[paths_col].iteritems()
     running_total = load_matrix_from(next(subject_matrix_paths)[1])
-    matrices = [running_total] 
+    matrices = [running_total.copy()] 
 
     # Iteratively add every matrix to the running total
     just_printed = 0
@@ -262,34 +262,13 @@ def get_average_matrix(subset, paths_col, cli_args):
                                         just_printed)
 
     # Divide running total matrix by number of matrices
-    divisor_matrix = np.ndarray(running_total.shape)
-    divisor_matrix.fill(subset_size)
+    divisor_matrix = get_divisor_matrix(running_total.shape, subset_size)
     avg_matrix = np.divide(running_total, divisor_matrix)
     
-    # If user asked to get variances instead of means, then get variances 
+    # Get variances instead of means if user asked for variances
     if cli_args.correlate_variances:
-        avg_matrix = get_variance_matrix(avg_matrix, matrices, divisor_matrix)
+        avg_matrix = get_variance_matrix(avg_matrix, matrices, subset_size)
     return avg_matrix
-
-
-def get_variance_matrix(avg_matrix, matrices, divisor, show_progress=None):
-    """
-    :param avg_matrix: numpy.ndarray which is an average of many matrices
-    :param matrices: List of numpy.ndarrays which are all of those matrices
-    :param divisor: numpy.ndarray with the same dimensions as avg_matrix, with
-                    the number of matrices in every cell 
-    :param show_progress: Function accepting 2 integers, current index and 
-                          previously printed index, to show progress to user
-    :return: numpy.ndarray with the variances of every index in the matrices
-    """
-    all_matrices = np.dstack(matrices) 
-    just_printed = 0
-    for i in range(len(matrices)):  # [:, :, i] assumes all matrices are 2D
-        all_matrices[:, :, i] = np.square(np.subtract(avg_matrix,
-                                                      all_matrices[:, :, i]))
-        if show_progress:
-            just_printed = show_progress(i, just_printed)
-    return np.divide(np.sum(all_matrices, axis=-1), divisor)
 
 
 def get_cli_args(script_description, arg_names, pwd, validate_fn=None):
@@ -326,6 +305,16 @@ def get_confidence_interval(series, confidence=0.95):
     series_mean = series.mean()
     return series_mean - distance_from_mean, series_mean + distance_from_mean
 
+
+def get_divisor_matrix(shape, size):
+    """
+    :param shape: Tuple of integers describing the shape of a numpy.ndarray
+    :param size: Integer >0 describing how many subjects are in the sample
+    :return: numpy.ndarray of the specified shape, with size int in every cell
+    """
+    divisor_matrix = np.ndarray(shape)
+    divisor_matrix.fill(size)
+    return divisor_matrix
 
 
 def get_family_info(subject, family_vars):
@@ -432,6 +421,28 @@ def get_subset_of(group, subset_size):
     collect_invalid_members_of(subset)
     return make_subset_valid(subs_missing_sibs, collect_invalid_members_of,
                              subset, group, FAMILY["REL"], ID, subset_size)
+
+
+def get_variance_matrix(avg_matrix, matrices, subset_size, show_progress=None):
+    """
+    :param avg_matrix: numpy.ndarray which is an average of many matrices
+    :param matrices: List of numpy.ndarrays which are all of those matrices
+    :param divisor: numpy.ndarray with the same dimensions as avg_matrix, with
+                    the number of matrices in every cell 
+    :param show_progress: Function accepting 2 integers, current index and 
+                          previously printed index, to show progress to user
+    :return: numpy.ndarray with the variances of every index in the matrices
+    """
+    all_matrices = np.dstack(matrices) 
+    just_printed = 0
+    for i in range(len(matrices)):  # [:, :, i] assumes all matrices are 2D
+        all_matrices[:, :, i] = np.square(np.subtract(
+            all_matrices[:, :, i], avg_matrix
+        )) / (subset_size - 1)
+        if show_progress:
+            just_printed = show_progress(i, just_printed)
+    return np.divide(np.sum(all_matrices, axis=-1),
+                     get_divisor_matrix(avg_matrix.shape, subset_size))
 
 
 def get_which_str_in_filename(filename, possible_names):
