@@ -4,7 +4,7 @@
 Average matrix creation for automated subset analysis script
 Greg Conan: conan@ohsu.edu
 Created 2019-11-20
-Last Updated 2019-02-13
+Last Updated 2019-02-18
 """
 
 ##################################
@@ -38,7 +38,8 @@ def main():
     cli_args = get_cli_args(
         "Script to get the average matrices of two subject sets",
         ["example_file", "group_1_avg_file", "group_2_avg_file", 
-         "inverse_fisher_z", "matrices_conc_1", "matrices_conc_2", "output"],
+         "inverse_fisher_z", "matrices_conc_1", "matrices_conc_2", "output",
+         "correlate_variances"],
         PWD, validate_cli_args
     )
     

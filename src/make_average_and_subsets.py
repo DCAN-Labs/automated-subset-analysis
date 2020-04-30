@@ -4,7 +4,7 @@
 Combination average matrix maker and subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2019-12-12
-Last Updated 2020-01-08
+Last Updated 2020-02-19
 """
 
 ##################################
@@ -43,7 +43,8 @@ def main():
         run_ASA_or_MAM_script(
             os.path.join(PWD, "make_average_matrix.py"),
             ("matrices_conc_1", "matrices_conc_2", "group_1_avg_file",
-             "group_2_avg_file", "output", "example_file", "inverse_fisher_z"),
+             "group_2_avg_file", "output", "example_file", "inverse_fisher_z",
+             "correlate_variances"),
              cli_args
         )
         print("Average matrices created: {}".format(*[
@@ -87,7 +88,7 @@ def run_ASA_or_MAM_script(to_run, to_include, cli_args):
         val = getattr(cli_args, arg, None)
         if val:
             if "demo_file" not in arg:
-                cmd.append("--{}".format(arg).replace("_", "-"))
+                cmd.append(as_cli_arg(arg))
             if val is not True:
                 if isinstance(val, list):
                     val = " ".join((str(v) for v in val))
