@@ -1,10 +1,10 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
 
 """
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-02-14
+Updated 2020-03-25
 """
 
 ##################################
@@ -58,29 +58,24 @@ def main():
 
     # If user said to skip the subset generation and use pre-existing subset
     # correlations, then make pd.DataFrame to visualize those
-    try:
-        if cli_args.only_make_graphs:
-            only_make_graphs(cli_args)
-        else:
+    if cli_args.only_make_graphs:
+        only_make_graphs(cli_args)
+    else:
 
-            # Make and save all subsets and their correlations, unless said to
-            # get pre-existing subsets' correlations instead
-            get_subs = (skip_subset_generation
-                        if getattr(cli_args, "skip_subset_generation", None)
-                        else save_and_get_all_subsets)
-            all_subsets = get_subs(cli_args, "subset_{}_with_{}_subjects.csv")
+        # Make and save all subsets and their correlations, unless said to
+        # get pre-existing subsets' correlations instead
+        get_subs = (skip_subset_generation
+                    if getattr(cli_args, "skip_subset_generation", None)
+                    else save_and_get_all_subsets)
+        all_subsets = get_subs(cli_args, "subset_{}_with_{}_subjects.csv")
 
-            # Go to output dir to make visualizations of subset correlations
+        # Go to output dir to make visualizations of subset correlations
+        if not cli_args.parallel:
+            chdir_to(cli_args.output)
+        for correls_df_name, correls_df in get_correl_dataframes(
+                all_subsets, cli_args).items():
             if not cli_args.parallel:
-                chdir_to(cli_args.output)
-            for correls_df_name, correls_df in get_correl_dataframes(
-                    all_subsets, cli_args).items():
-                if not cli_args.parallel:
-                    make_visualization(correls_df, cli_args, correls_df_name)
-
-    except Exception as e:
-        get_and_print_timestamp_when(sys.argv[0], "crashed")
-        raise e
+                make_visualization(correls_df, cli_args, correls_df_name)
 
     # Print the date and time when this script started and finished running
     print(starting_timestamp)
@@ -94,7 +89,11 @@ def validate_cli_args(cli_args, parser):
     :param parser: argparse ArgumentParser to raise error if anything's invalid
     :return: Validated command-line arguments argparse namespace
     """
-    try:
+    try:  # Validate that --y-range has exactly 2 numbers, min and max
+        if (cli_args.y_range and isinstance(cli_args.y_range[0], float)
+                and len(cli_args.y_range) != 2):
+            parser.error("--y-range must be only two numbers.")
+            
         # If user said to only make graphs, validate that the path they gave is
         # a file with correlations instead of a path to a directory
         if cli_args.only_make_graphs:
@@ -103,7 +102,7 @@ def validate_cli_args(cli_args, parser):
                     parser.error(correl_file + " is a directory, not a file. "
                                  "Please enter the name of a readable file as "
                                  "the --only-make-graphs argument.")
-        else:
+        else:        
             # If user said to get correlations from existing subsets, get the
             # path to the directory to save correlations in
             path_skip_sub = getattr(cli_args, "skip_subset_generation", None)
@@ -115,7 +114,6 @@ def validate_cli_args(cli_args, parser):
             # For each group, get the path to the directory with its .pconn
             # files, and the path to the file containing its demographic data
             cli_args = add_pconn_paths_to(cli_args, [1, 2], parser)
-
         return cli_args
     except (OSError, argparse.ArgumentTypeError) as e:
         parser.error(str(e))
@@ -158,8 +156,7 @@ def replace_paths_column(demographics, matr_conc):
     """
     :param demographics: pandas.DataFrame with demographic information,
                          including 0 or 1 column(s) with paths to matrix files
-    :param matr_conc: String which is a valid path to a .conc file with paths
-                      to matrix files
+    :param matr_conc: String, valid path to a .conc file with matrix file paths
     :return: demographics, but replacing its previous paths column with the
              contents of the matr_conc file
     """
@@ -235,8 +232,7 @@ def skip_subset_generation(cli_args, subsets_file_name):
 
 def is_subset_csv(path, subset_filename_parts, n_analyses):
     """
-    Check if a path points to a subset .csv file made by this script within the
-    --n-analyses variable
+    Check if a path is to a subset .csv file made by this script
     :param path: String which should be a valid path to a readable file
     :param subsets_filename_parts: List of strings which each have part of the
                                    format of subset file names
@@ -393,12 +389,12 @@ def get_correl_dataframes(all_subsets, cli_args):
 
         # Get and show all subset correlations; put them in the dict to return
         subset_size = sub_pair.pop("subset_size")
-        correl_lists = get_sub_pair_correls(subset_size, correl_lists, subsets)
+        correl_lists = get_sub_pair_correls(subset_size, correl_lists, subsets,
+                                            cli_args.spearman_rho)
 
         # Print how long this has taken, and roughly how much time is left
         progress = update_progress(progress, "making average matrices",
                                    subset_size, start_time)
-
     return {name: save_correlations_and_get_df(
                 correls, "correlations_{}.csv".format(name), cli_args
             ) for name, correls in correl_lists.items()}
@@ -428,7 +424,7 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
     return avg_matrices
 
 
-def get_sub_pair_correls(subset_size, correl_lists, subsets):
+def get_sub_pair_correls(subset_size, correl_lists, subsets, rho=None):
     """
     Get, print, and collect the correlations between a subset pair
     :param subset_size: Integer which is how many subjects are in each subset
@@ -440,6 +436,8 @@ def get_sub_pair_correls(subset_size, correl_lists, subsets):
         sub_keys = df_name.split("_")
         params = [subsets[sub] for sub in sub_keys]
         params.append(subset_size)
+        if rho:
+            params.append(rho)
         correl_lists[df_name].append(get_correls_between(*params))
         title = ("group {0}'s subset and group {1}".format(
                      sub_keys[0][-1], sub_keys[1][-1]
@@ -449,16 +447,18 @@ def get_sub_pair_correls(subset_size, correl_lists, subsets):
     return correl_lists
 
 
-def get_correls_between(arr1, arr2, num_subjects):
+def get_correls_between(arr1, arr2, num_subjects, corr=None):
     """
     :param arr1: np.ndarray with only numeric values
     :param arr2: np.ndarray with only numeric values
     :param num_subjects: Integer, number of subjects in each group
+    :param corr: Function which, given 2 arrays, returns their correlation
     :return: Dictionary mapping "Subjects" to num_subjects and mapping
              "Correlation" to the correlation between arr1 and arr2 
     """
-    return {"Subjects": num_subjects,
-            "Correlation": np.corrcoef(arr1, arr2)[0, 1]}
+    if not corr:  # By default, use numpy to return the Pearson's r
+        corr = lambda x, y: np.corrcoef(x, y)[0, 1]
+    return {"Subjects": num_subjects, "Correlation": corr(arr1, arr2)}
 
 
 def save_correlations_and_get_df(correls_list, correl_file_name, cli_args):
@@ -519,10 +519,9 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
                                                 x.unique().sum() / x.nunique())
     last_avg = float(avgs.tail(1).values)
-    avgs_plot = plotly.graph_objs.Scatter(
-        x=avgs.index.values, y=avgs["Correlation"], mode="lines",
-        name="Average correlations"
-    )
+    avgs_plot = plotly.graph_objs.Scatter(x=avgs.index.values, mode="lines",
+                                          y=avgs["Correlation"],
+                                          name="Average correlations")
 
     # Get and display the visualization title, and averages
     vis_title = (cli_args.graph_title if cli_args.graph_title
@@ -538,7 +537,8 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     # area to plot as lines
     bounds = get_shaded_area_bounds(correls_df, cli_args.fill)
     bounds_params = ({"showlegend": False} if cli_args.fill == "all" else
-                     {"name": "95% confidence interval", "showlegend": True})
+                     {"name": "95 percent confidence interval",
+                      "showlegend": True})
     lower_plot = plotly.graph_objs.Scatter(
         x=avgs.index.values, y=bounds[0], fill="tonexty", line_color=clear, 
         fillcolor=red(0.2), **bounds_params
@@ -561,8 +561,7 @@ def make_visualization(correls_df, cli_args, corr_df_name):
 def get_layout_args(cli_args, correls_df, title, last_avg):
     """
     :param cli_args: argparse namespace with all command-line arguments. This
-                     function uses the --axis_font_size, --title_font_size, and 
-                     --y_range arguments.
+                     function uses axis and title font size, plus y-range.
     :param correls_df: pandas.DataFrame with one column titled "Subjects" and
                        another titled "Correlations"; both have numeric values
     :param title: String to put at the top of the visualization
@@ -663,4 +662,3 @@ def get_plot_layout(all_args):
 
 if __name__ == '__main__':
     main()
-

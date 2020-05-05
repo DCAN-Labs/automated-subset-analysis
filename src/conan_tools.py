@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-02-14
+Updated 2020-03-23
 """
 
 ##################################
@@ -229,10 +229,10 @@ def get_ASA_arg_names():
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
             "columns", "correlate_variances", "euclidean", "fill", 
             GP_AV_FILE.format(1), GP_AV_FILE.format(2), GP_MTR_FILE.format(1),
-            GP_MTR_FILE.format(2), "hide_legend", "marker_size", "n_analyses",
-            "nan_threshold", "no_matching", "only_make_graphs", "output", 
-            "parallel", "skip_subset_generation", "subset_size", 
-            "graph_title", "title_font_size", "y_range", "inverse_fisher_z"]
+            GP_MTR_FILE.format(2), "graph_title", "hide_legend", "marker_size",
+            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs",
+            "output", "parallel", "skip_subset_generation", "spearman_rho", 
+            "subset_size", "title_font_size", "y_range", "inverse_fisher_z"]
 
 
 def get_average_matrix(subset, paths_col, cli_args):
@@ -351,7 +351,7 @@ def get_group_demographics(cli_args, gp_num, gp_demo_str, parser):
     """
     return drop_nan_rows_from(pd.read_csv(
         getattr(cli_args, gp_demo_str.format(gp_num)),
-        na_values=(" ", 777, 999)
+        na_values=(" ", 777, 999, "#NULL!", "#NULL")
     ), gp_num, cli_args.nan_threshold, parser)
 
 
@@ -841,19 +841,28 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "parameter.")
         )
 
+
+    def spearman_rho():
+        parser.add_argument(
+            "-rho",
+            "--spearman-rho",
+            action="store_true",
+            help=("Include this flag to correlate matrices using the "
+                  "Spearman's rho correlation value instead of the default "
+                  "(Pearson's r).")
+        )
+
     # Optional: Custom data range for visualization
     def y_range():
         parser.add_argument(
             "-y",
             "--y-range",
-            nargs=2,
-            type=float,
-            metavar=("Y-MIN", "Y-MAX"),
-            help=("Range of y_axis in visualization. By default, this script "
-                  "will automatically set the y-axis boundaries to show all of "
-                  "the correlation values and nothing else. If this argument "
-                  "is used, then it should be two floating-point numbers: the "
-                  "minimum and maximum values to be shown on the "
+            type=valid_float_or_falsy,
+            nargs="+",
+            metavar="Y-MIN Y-MAX",
+            help=("Range of y_axis in visualization. If this "
+                  "argument is used, then it should be two floating-point "
+                  "numbers the minimum and maximum values to be shown on the "
                   "visualizations' y-axes.")
         )
 
@@ -1105,6 +1114,15 @@ def shuffle_out_subset_of(subset, to_shuffle_out, exclusive_pool):
     ))
 
 
+def spearman_rho(arr1, arr2):
+    """ 
+    :param arr1: np.ndarray with only numeric values
+    :param arr2: np.ndarray with only numeric values
+    :return: Float, the Spearman's rho correlation value between arr1 and arr2
+    """
+    return stats.spearmanr(arr1, arr2)[0]
+
+
 def stringify_timedelta(timestamp):
     """
     Turn a timedelta object, or a number representing one, into a string
@@ -1170,6 +1188,38 @@ def valid_conc_file(path):
     return validate(path, lambda x: os.path.splitext(x)[1] == ".conc",
                     valid_readable_file, "{} is not a .conc file.")
 
+
+def valid_float_or_falsy(user_arg):
+    """
+    :return: True if user_arg is falsy or is a numeric string
+    """
+    try:
+        if user_arg is not None and user_arg is not False:
+            user_arg = float(user_arg)
+        return user_arg
+    except ValueError:
+        raise argparse.ArgumentTypeError("{} must be a number"
+                                         .format(user_arg))
+
+    """
+    print("user_arg: {}, isnumeric: {}".format(user_arg, user_arg.isnumeric()))
+    return user_arg if user_arg.isnumeric() else (user_arg if not user_arg else None)
+    print("user_arg: {}".format(user_arg))
+    return validate(user_arg, lambda x: float(x) if isinstance(x, str) else x,
+                    lambda y: y if isinstance(y, float) else None,
+                    "{} must be a number or a falsy value")
+    try:
+        if isinstance(user_arg, str):
+            user_arg = float(user_arg)
+        elif not isinstance(user_arg, float):
+            assert not user_arg
+        return user_arg
+    except (TypeError, ValueError, AssertionError):
+        raise argparse.ArgumentTypeError("{} is not a number".format(user_arg))
+    # OR...
+    return user_arg if user_arg.isnumeric() if isinstance(user_arg, str) else not user_arg
+    """
+    
 
 def valid_output_dir(path):
     """
