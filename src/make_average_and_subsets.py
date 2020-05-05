@@ -87,7 +87,7 @@ def run_ASA_or_MAM_script(to_run, to_include, cli_args):
         val = getattr(cli_args, arg, None)
         if val:
             if "demo_file" not in arg:
-                cmd.append("--{}".format(arg).replace("_", "-"))
+                cmd.append(as_cli_arg(arg))
             if val is not True:
                 if isinstance(val, list):
                     val = " ".join((str(v) for v in val))
