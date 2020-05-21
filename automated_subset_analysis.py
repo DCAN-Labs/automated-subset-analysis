@@ -446,6 +446,7 @@ def make_effect_size_matrix(sub_vars, var2, sub_size, size2, sub_avg, avg2,
     pool_stdev = sub_vars.apply(lambda x: dual_df_apply(
         x, var2, get_pooled_stdev, sub_size, size2
     ))
+
     # Ignore invalid division warnings, then replace invalid quotients with 0.0
     with np.errstate(divide="ignore", invalid="ignore"):
         effect_size_matrix =  np.divide(
@@ -453,10 +454,10 @@ def make_effect_size_matrix(sub_vars, var2, sub_size, size2, sub_avg, avg2,
         ).replace([np.inf, np.nan, -np.inf], 0)
 
     # Collect all effect sizes mapped to their subject size, for visualization
-    effect_size_matrix.applymap(lambda x: sizes.append({
+    effect_size_matrix.applymap(lambda x: effect_sizes.append({
         "Subjects": sub_size, "Correlation": x
     }))
-    return sizes
+    return effect_sizes
 
 
 def get_correl_dataframes(all_subsets, cli_args):
