@@ -29,6 +29,7 @@ ASA_DIR = (os.path.abspath(os.path.dirname(PWD))
 def main():
     try:
         get_and_print_timestamp_when(sys.argv[0], "started")
+        gp_av = "group_{}_avg_file"
 
         # Get all command-line arguments from user
         arg_names = remove_if_in(get_ASA_arg_names(), "continuous_variables")
@@ -42,12 +43,12 @@ def main():
             cli_args = add_default_avg_matr_path_to(cli_args, gp_num)
         run_ASA_or_MAM_script(
             os.path.join(PWD, "make_average_matrix.py"),
-            ("matrices_conc_1", "matrices_conc_2", "group_1_avg_file",
-             "group_2_avg_file", "output", "example_file", "inverse_fisher_z",
-             "correlate_variances"), cli_args
+            ("matrices_conc_1", "matrices_conc_2", gp_av.format(1),
+             gp_av.format(2), "output", "example_file", "inverse_fisher_z",
+             "calculate"), cli_args
         )
         print("Average matrices created: {}".format(*[
-            getattr(cli_args, "group_{}_avg_file".format(x)) for x in (1, 2)
+            getattr(cli_args, gp_av.format(x)) for x in (1, 2)
         ]))
 
         # Use those average matrices to run automated_subset_analysis.py

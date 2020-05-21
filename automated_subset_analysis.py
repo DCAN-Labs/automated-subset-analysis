@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-03-25
+Updated 2020-05-20
 """
 
 ##################################
@@ -72,9 +72,13 @@ def main():
         # Go to output dir to make visualizations of subset correlations
         if not cli_args.parallel:
             chdir_to(cli_args.output)
-        for correls_df_name, correls_df in get_correl_dataframes(
-                all_subsets, cli_args).items():
-            if not cli_args.parallel:
+        
+        # Get and save correlations or effect sizes, then make visualizations
+        correl_fn = (save_subset_effect_size_matrices if cli_args.calculate ==
+                     "effect-size" else get_correl_dataframes)
+        for correls_df_name, correls_df in correl_fn(all_subsets,
+                                                     cli_args).items():
+            if not cli_args.parallel:  # must call correl_fn even if --parallel
                 make_visualization(correls_df, cli_args, correls_df_name)
 
     # Print the date and time when this script started and finished running
@@ -127,7 +131,7 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
     :param parser: argparse ArgumentParser to raise error if anything's invalid
     :return: cli_args, but with all needed arguments
     """
-    for gp_num in group_nums:
+    for gp_num in group_nums: 
 
         # Import all of this group's demographics; drop empty columns
         group_demo_str = GP_DEMO_STR.format(gp_num)
@@ -352,12 +356,108 @@ def save_subsets(subs, output_dir, sub_num, subsets_file_name, sub_id_col):
     ), index=False)
 
 
+def save_subset_effect_size_matrices(all_subsets, cli_args):
+    """
+    For every subset, calculate its effect size matrix and save it to a .csv
+    :param all_subsets: List including every pair of subsets
+    :param cli_args: argparse namespace with all command-line arguments
+    :return: N/A
+    """
+    # Get both groups' average matrices, group sizes, and variance matrices
+    group_averages, gp_vars, gp_sizes = get_groups_avg_var_and_size(
+        cli_args, get_matr_file_col_name(cli_args)
+    )
+
+    # Get effect size matrices for all subset pairs
+    progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
+    effect_sizes = dict()
+    VAR = "variance"
+    AVG = "average"
+    for s in range(len(all_subsets)):
+        start_time = now()
+        sub_pair = all_subsets[s]
+        subset_size = sub_pair.pop("subset_size")
+        subset_data = dict()
+
+        # Effect size matrices for each subset to the other group
+        for gp_num, subset in sub_pair.items():
+
+            # Get group's and subset's variance matrices
+            other_gp = {1: 2, 2: 1}[gp_num]
+            gp_vars_df = pd.DataFrame(gp_vars[other_gp])
+            subset_data[gp_num] = get_average_matrix(
+                subset, get_matr_file_col_name(cli_args), cli_args
+            )
+            subset_data[gp_num][VAR] = pd.DataFrame(subset_data[gp_num][VAR])
+
+            # Make subset-to-group effect sizes matrix
+            gp_ids = "sub{}_all{}".format(gp_num, other_gp)
+            if gp_ids not in effect_sizes:
+                effect_sizes[gp_ids] = []
+            effect_sizes[gp_ids] = make_effect_size_matrix(
+                subset_data[gp_num][VAR], gp_vars_df, subset_size,
+                gp_sizes[other_gp], subset_data[gp_num][AVG],
+                group_averages[other_gp], effect_sizes[gp_ids]
+            )
+
+        # Make subset-to-subset effect sizes matrix
+        gp_ids = "sub1_sub2"
+        if gp_ids not in effect_sizes:
+            effect_sizes[gp_ids] = []
+        effect_sizes[gp_ids] = make_effect_size_matrix(
+            subset_data[1][VAR], subset_data[2][VAR], subset_size, subset_size,
+            subset_data[1][AVG], subset_data[2][AVG], effect_sizes[gp_ids]
+        )
+        progress = update_progress(progress, "getting effect sizes",
+                                   subset_size, start_time)
+    
+    # Save subset-size-to-effect-size lists as .csv files then return them
+    for gp_id, dicts_list in effect_sizes.items():
+        effect_sizes[gp_id] = save_correlations_and_get_df(
+            cli_args, dicts_list,
+            os.path.join(cli_args.output, "effect_sizes_{}.csv".format(gp_id)),
+        )
+    return effect_sizes
+
+
+def make_effect_size_matrix(sub_vars, var2, sub_size, size2, sub_avg, avg2,
+                            effect_sizes):
+    """
+    Create a matrix where each cell is the effect size comparing that cell of
+    a subset to that cell of another group, then return those effect sizes
+    :param sub_vars: pandas.DataFrame with the subset's variance for each cell
+    :param var2: pandas.DataFrame with another group's variance for each cell 
+    :param subset_size: Integer which is how many subjects are in the subset
+    :param size2: Integer which is how many subjects are in the other group
+    :param sub_avg: pandas.DataFrame with average values of each subset cell
+    :param avg2: pandas.DataFrame with the other group's cells' average values
+    :param effect_sizes: List of dictionaries, each of which has "Subjects" and
+                         "Correlation" (the latter actually means effect size)
+    :return: effect_sizes, with the effect sizes just calculated added in
+    """
+    # Make pooled standard deviation matrix
+    pool_stdev = sub_vars.apply(lambda x: dual_df_apply(
+        x, var2, get_pooled_stdev, sub_size, size2
+    ))
+    # Ignore invalid division warnings, then replace invalid quotients with 0.0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        effect_size_matrix =  np.divide(
+            np.abs(np.subtract(sub_avg, avg2)), pool_stdev
+        ).replace([np.inf, np.nan, -np.inf], 0)
+
+    # Collect all effect sizes mapped to their subject size, for visualization
+    effect_size_matrix.applymap(lambda x: sizes.append({
+        "Subjects": sub_size, "Correlation": x
+    }))
+    return sizes
+
+
 def get_correl_dataframes(all_subsets, cli_args):
     """
     :param all_subsets: List of dictionaries, each of which maps both group
                         numbers to a randomly selected subset of that group
     :param cli_args: argparse namespace with all command-line arguments. This
-                     function uses the --group_1_avg, --group_2_avg, and 
+                     function uses the --group-1-avg, --group-2-avg, and 
                      --output arguments. It also passes cli_args to 
                      get_avg_matrices_of_subsets and get_correls_between.
     :return: Dictionary of 3 string:pandas.DataFrame pairs such that each
@@ -396,7 +496,7 @@ def get_correl_dataframes(all_subsets, cli_args):
         progress = update_progress(progress, "making average matrices",
                                    subset_size, start_time)
     return {name: save_correlations_and_get_df(
-                correls, "correlations_{}.csv".format(name), cli_args
+                cli_args, correls, "correlations_{}.csv".format(name)
             ) for name, correls in correl_lists.items()}
 
 
@@ -414,14 +514,21 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
 
     # Get all data from .pconn files of every subject in the subset
     for sub_num, subset in subsets_dict.items():
-        col = (DEFAULT_DEM_VAR_MATR if getattr(
-                   cli_args, "matrices_conc_{}".format(sub_num), None
-               ) else DEFAULT_DEM_VAR_PCONNS) 
+        col = get_matr_file_col_name(cli_args) 
         print("Making average matrix for group {} subset.".format(sub_num))
         avg_matrices[sub_num] = get_average_matrix(subset, col, cli_args)
         print("Group {} subset's average matrix: \n{}"
               .format(sub_num, avg_matrices[sub_num]))
     return avg_matrices
+
+
+def get_matr_file_col_name(cli_args):
+    """
+    :param cli_args: argparse namespace with --matrices-conc-1
+    :return: String naming demographics .csv column with .nii matrix
+    """
+    return (DEFAULT_DEM_VAR_MATR if getattr(cli_args, "matrices_conc_1", None)
+            else DEFAULT_DEM_VAR_PCONNS) 
 
 
 def get_sub_pair_correls(subset_size, correl_lists, subsets, rho=None):
@@ -461,14 +568,15 @@ def get_correls_between(arr1, arr2, num_subjects, corr=None):
     return {"Subjects": num_subjects, "Correlation": corr(arr1, arr2)}
 
 
-def save_correlations_and_get_df(correls_list, correl_file_name, cli_args):
+def save_correlations_and_get_df(cli_args, correls_list, correl_file_name):
     """
     Save correlations to .csv file
-    :param correls_list: List of dictionaries where each dictionary contains
-    "Subjects" and "Correlation" as a key with a numerical value
+    :param cli_args: argparse namespace with all command-line arguments
+    :param correls_list: List of dictionaries, each has "Subjects" and
+                         "Correlation" as a key with a numerical value
     :param correl_file_name: Path to the file to save correlations into
     :return: pandas.DataFrame with a header row ("Subjects", "Correlation"),
-    subset sizes in one column, and correlations in its second column
+             subset sizes in one column, and correlations in its second column
     """
     out_dir = (os.path.dirname(cli_args.output)
                if getattr(cli_args, "parallel", False) else cli_args.output)
@@ -508,20 +616,32 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     def red(opacity):
         return "rgba(255,0,0,{})".format(opacity)
 
-    # Make scatter plot mapping subset size to pairwise correlations
-    scatter_plot = plotly.graph_objs.Scatter(
-        x=correls_df["Subjects"], y=correls_df["Correlation"], mode="markers",
-        name="All correlations", line_color=red(1),
-        marker={"size": cli_args.marker_size}
-    )
+    # If plotting effect size, add standard deviation
+    if cli_args.calculate == "effect-size":
+        y_metric = "effect size"
+        scatter_plot = []
+
+    # Otherwise make scatter plot mapping subset size to pairwise correlations
+    else:
+        y_metric = "correlation"
+        scatter_plot = [plotly.graph_objs.Scatter(
+            x=correls_df["Subjects"], y=correls_df["Correlation"],
+            name="All {}s".format(y_metric), line_color=red(1),
+            marker={"size": cli_args.marker_size}, mode="markers"
+        )]
 
     # Add average lines to plot using averages of each subset size
     avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
                                                 x.unique().sum() / x.nunique())
     last_avg = float(avgs.tail(1).values)
-    avgs_plot = plotly.graph_objs.Scatter(x=avgs.index.values, mode="lines",
-                                          y=avgs["Correlation"],
-                                          name="Average correlations")
+    stdev = {}  # Add upper & lower bounds of stan dev for effect size
+    if cli_args.calculate == "effect-size":
+        avgs["StDev"] = get_shaded_area_bounds(correls_df, "stdev")
+        stdev = {"type": "data", "array": avgs["StDev"], "visible": True}
+    avgs_plot = plotly.graph_objs.Scatter(
+        x=avgs.index.values, y=avgs["Correlation"], mode="lines",
+        name="Average {}s".format(y_metric), line_color=red(1), error_y=stdev
+    )
 
     # Get and display the visualization title, and averages
     vis_title = (cli_args.graph_title if cli_args.graph_title
@@ -551,7 +671,7 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     with HiddenPrints():
         plotly.offline.init_notebook_mode()
         plotly.offline.plot({
-            "data": [scatter_plot, avgs_plot, upper_plot, lower_plot],
+            "data": scatter_plot + [avgs_plot, upper_plot, lower_plot],
             "layout": get_plot_layout(get_layout_args(cli_args, correls_df,
                                                       vis_title, last_avg))
         }, image="png", filename=vis_file)
@@ -573,7 +693,8 @@ def get_layout_args(cli_args, correls_df, title, last_avg):
     )
     return (y_axis_min, y_axis_max, title, last_avg, cli_args.title_font_size,
             cli_args.axis_font_size, correls_df["Subjects"].mean(),
-            not cli_args.hide_legend)
+            not cli_args.hide_legend, "Effect Size (d)" if cli_args.calculate
+            == "effect-size" else "Correlation (r)")
 
 
 def get_shaded_area_bounds(all_data_df, to_fill):
@@ -598,30 +719,34 @@ def get_shaded_area_bounds(all_data_df, to_fill):
             lambda x: x.quantile(quantile)
         )["Correlation"]
 
-    if to_fill == "confidence_interval":
+    if to_fill == "all":
+        result = (aggregate_data(0), aggregate_data(1))
+    elif to_fill == "confidence_interval":
         intervals = all_data_df.groupby(["Subjects"]).agg(
             lambda x: get_confidence_interval(x)
         )
         intervals = pd.DataFrame(intervals["Correlation"].tolist(),
                                  index=intervals.index)
         result = (intervals[0], intervals[1])
-    elif to_fill == "all":
-        result = (aggregate_data(0), aggregate_data(1))
+    elif to_fill == "stdev":
+        intervals = all_data_df.groupby(["Subjects"]).agg(lambda x: x.std())
+        result = pd.DataFrame(intervals["Correlation"].tolist(),
+                              index=intervals.index)
     else:
-        raise ValueError("Invalid value for --fill parameter.")
+        raise ValueError("Invalid value for --fill parameter.")                        
     return result
 
 
-def get_plot_layout(all_args):
+def get_plot_layout(args):
     """
     Return all format settings for creating a pretty plot visualization.
-    :param layout_args: Tuple of all arguments needed for visualization format
+    :param args: Tuple of all arguments needed for visualization format
     :return: Nested dictionary containing all needed plot attributes
     """
     # Local variables from unpacked list of args to use in layout: 
-    #   Lowest and highest y-values to show, graph title, last y-value to show,
-    #   graph title and axis title font sizes, average subset size
-    y_min, y_max, title, last_y, title_size, axis_font, x_avg, show = all_args
+    # Lowest and highest y-values to show, graph title, last y-value to show,
+    # graph title and axis title font sizes, average subset size, y-axis title
+    y_min, y_max, title, last_y, ttl_size, axis_font, x_avg, show, y_ttl = args
 
     # Others: RGBA colors as well as space buffer above y_max and below y_min
     black = "rgb(0, 0, 0)"
@@ -637,7 +762,7 @@ def get_plot_layout(all_args):
                        and "yaxis" do not have in common
         :return: Dictionary with all parameters needed for formatting an axis
         """
-        result = {"title": {"font": {"size": title_size}, "text": title_txt},
+        result = {"title": {"font": {"size": ttl_size}, "text": title_txt},
                   "tickcolor": black, "ticklen": 15, "ticks": "outside",
                   "tickfont": {"size": axis_font}, "tickwidth": 2,
                   "showline": True, "linecolor": black, "linewidth": 2}
@@ -645,7 +770,7 @@ def get_plot_layout(all_args):
         return result
 
     return {"title": {"text": title, "x": 0.5, "xanchor": "center",
-                      "font": {"size": title_size}},
+                      "font": {"size": ttl_size}},
             "paper_bgcolor": white, "plot_bgcolor": white, "showlegend": show,
             "legend": {"font": {"size": axis_font}, "x": 0.5,
                        # Place the legend in white space away from the graph
@@ -655,7 +780,7 @@ def get_plot_layout(all_args):
                 dtick=count_digits_of(x_avg)
             ),
             "yaxis": get_axis_layout(
-                title_txt="Correlation (r)", tickmode="auto", nticks=5,
+                title_txt=y_ttl, tickmode="auto", nticks=5,
                 range=(y_min - y_range_step, y_max + y_range_step) 
             )}
 

@@ -42,10 +42,10 @@ def main():
 
     # Make a visualization of every .csv file with correlations
     for csv_file in os.scandir(cli_args.output):
-        if csv_file.is_file():
-            csv_path = csv_file.path
+        if csv_file.is_file() and os.path.splitext(csv_file.path)[1] == ".csv":
+            print(csv_file.path)
             graph_title = get_graph_title(csv_file)
-            run_ASA_script(args_to_get, csv_path, cli_args, graph_title)
+            run_ASA_script(args_to_get, csv_file.path, cli_args, graph_title)
 
 
 def get_graph_title(csv_file):
@@ -53,16 +53,17 @@ def get_graph_title(csv_file):
     :param csv_file: os.DirEntry of a correlations .csv file 
     :return: Title of visualization generated from csv_file based on filename
     """
+    csv_filename = os.path.splitext(csv_file.name)[0]
     return "<br>".join((
         {"pconn": "Parcel. Connectivity Matrix",
          "curv_map": "Curvature Maps",
          "cortical": "Cortical Thickness",
          "myelin_cortical": "Myelin Maps to Cortical Thickness",
          "myelin_myelin": "Myelin Maps",
-         "sulcus": "Sulcus_Depth"}[csv_file.name[:-10]],
+         "sulcus": "Sulcus Depth"}[csv_filename[:-10]],
         {"sub2_all1": "Group 1 to Subset 2",
          "sub1_all2": "Group 2 to Subset 1",
-         "sub1_sub2": "Both Subsets"}[csv_file.name[-9:]]
+         "sub1_sub2": "Both Subsets"}[csv_filename[-9:]]
     ))
 
 
@@ -74,7 +75,7 @@ def run_ASA_script(to_include, csv_file, cli_args, graph_title):
     :param cli_args: argparse namespace with all command-line arguments
     :return: N/A
     """
-    cmd = ["python", ASA_SCRIPT]
+    cmd = ["python3", ASA_SCRIPT]
     for arg in to_include:
         val = getattr(cli_args, arg, None)
         if val:
@@ -84,5 +85,11 @@ def run_ASA_script(to_include, csv_file, cli_args, graph_title):
                 if isinstance(val, list):
                     val = " ".join((str(v) for v in val))
                 cmd.append(str(val))
-    cmd += ["--only-make-graphs", csv_file, "--graph-title", graph_title]
+    print("Graph title: {}".format(graph_title))
+    print("Filename: {}".format(csv_file))
+    cmd += ["--only-make-graphs", csv_file, "--graph-title", graph_title.join(("'", "'"))]
     os.system(" ".join(cmd))
+
+
+if __name__ == '__main__':
+    main()

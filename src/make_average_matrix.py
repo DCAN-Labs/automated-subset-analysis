@@ -4,7 +4,7 @@
 Average matrix creation for automated subset analysis script
 Greg Conan: conan@ohsu.edu
 Created 2019-11-20
-Last Updated 2019-02-19
+Last Updated 2020-05-13
 """
 
 ##################################
@@ -39,7 +39,7 @@ def main():
         "Script to get the average matrices of two subject sets",
         ["example_file", "group_1_avg_file", "group_2_avg_file", 
          "inverse_fisher_z", "matrices_conc_1", "matrices_conc_2", "output",
-         "correlate_variances"],
+         "calculate"],
         PWD, validate_cli_args
     )
     
@@ -49,7 +49,7 @@ def main():
     paths_col = "scalar"
     for group_num in ("1", "2"):      
         print("Making average matrix for group {}".format(group_num))
-        save_to_cifti2(get_average_matrix(get_total_matrix_from_conc(
+        save_avg_matrix(get_average_matrix(get_total_matrix_from_conc(
             cli_args, group_num, paths_col, "id_redcap"
         ), paths_col, cli_args), cli_args, group_num)
 
@@ -115,11 +115,9 @@ def get_total_matrix_from_conc(cli_args, gp_num, paths_col, id_col):
     return group_scalars_df
 
 
-def save_to_cifti2(avg_matrix, cli_args, gp_num):
+def save_avg_matrix(avg_matrix, cli_args, gp_num):
     """
-    Save the average matrix as a cifti2 file (*.nii) by importing an arbitrary
-    cifti2 matrix and saving a copy of it with its data replaced by the data of
-    the average matrix
+    Save the average matrix as a cifti2 file (*.nii)
     :param avg_matrix: numpy.ndarray with data to save into a cifti2 file
     :param cli_args: argparse namespace with all command-line arguments. This
                      function uses the group_1_conc, group_2_conc,
@@ -127,28 +125,12 @@ def save_to_cifti2(avg_matrix, cli_args, gp_num):
     :param gp_num: String that is just the group number of the matrix to save
     :return: N/A
     """
-    group_file = getattr(cli_args, "matrices_conc_{}".format(gp_num))
-
-    # Import an arbitrary input .nii file
-    nii_matrix = nibabel.cifti2.load(cli_args.example_file)
-    
-    # Replace the arbitrary file's data with the average matrix's data
-    avg_nii_matrix = nibabel.cifti2.cifti2.Cifti2Image(
-        dataobj = avg_matrix,
-        header = nii_matrix.header,
-        nifti_header = nii_matrix.nifti_header,
-        file_map = nii_matrix.file_map
-    )
-
-    # Get the file path to save the average matrix into
     cli_args = add_default_avg_matr_path_to(cli_args, gp_num,
                                             argparse.ArgumentParser(),
                                             DEFAULT_DEM_VAR_PCONNS)
     avg_matr = getattr(cli_args, "group_{}_avg_file".format(gp_num))
-
-    # Save the average matrix file
     print("Saving group {} average matrix to {}".format(gp_num, avg_matr))
-    nibabel.cifti2.save(avg_nii_matrix, avg_matr)
+    save_to_cifti2(avg_matrix, cli_args.example_file, avg_matr)
 
 
 if __name__ == "__main__":

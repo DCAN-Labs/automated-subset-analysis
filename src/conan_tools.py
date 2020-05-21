@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-03-23
+Updated 2020-05-15
 """
 
 ##################################
@@ -153,6 +153,25 @@ def drop_nan_rows_from(group, group_num, nan_threshold, parser):
         parser.error("Too many rows with NaN values at threshold of "
                      "{:.1%}".format(nan_threshold))
     return group
+        
+
+def dual_df_apply(gp1_column, gp2_df, to_apply, gp1_size, gp2_size):
+    """
+    Apply a function to two equal-size pandas.DataFrames by iterating over
+    a series of theirs simultaneously.
+    :param gp1_column: pandas.Series, a column from the first DataFrame
+    :param gp2_df: pandas.DataFrame, the second DataFrame
+    :param to_apply: Function to apply to every element in both DataFrames
+    :param gp1_size: Integer, the number of subjects in the first group
+    :param gp2_size: Integer, the number of subjects in the second group
+    :return: pandas.Series with to_apply called using both columns
+    """
+    gp2_column = gp2_df[gp1_column.name]
+    for i in range(len(gp1_column.index)):
+        gp1_column.iat[i] = to_apply(
+            gp1_column.iat[i], gp2_column.iat[i], gp1_size, gp2_size
+        )
+    return gp1_column
 
 
 def extract_subject_id_from(path):
@@ -227,11 +246,11 @@ def get_ASA_arg_names():
              automated_subset_analysis.py as a cli_args argparse parameter
     """
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
-            "columns", "correlate_variances", "euclidean", "fill", 
-            GP_AV_FILE.format(1), GP_AV_FILE.format(2), GP_MTR_FILE.format(1),
-            GP_MTR_FILE.format(2), "graph_title", "hide_legend", "marker_size",
-            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs",
-            "output", "parallel", "skip_subset_generation", "spearman_rho", 
+            "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
+            GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
+            "graph_title", "hide_legend", "marker_size", "n_analyses",
+            "nan_threshold", "no_matching", "only_make_graphs", "output",
+            "parallel", "skip_subset_generation", "spearman_rho", 
             "subset_size", "title_font_size", "y_range", "inverse_fisher_z"]
 
 
@@ -242,8 +261,7 @@ def get_average_matrix(subset, paths_col, cli_args):
     the subset into memory at once)
     :param subset: pandas.DataFrame with a column of paths to matrix files
     :param paths_col: String naming the column of paths to matrix files
-    :param cli_args: argparse namespace with --fisher-z and
-                     --correlate-variances
+    :param cli_args: argparse namespace with --fisher-z and --calculate
     :return: numpy.ndarray averaging all of the subset's subjects' matrices
     """
     subset_size = len(subset.index)
@@ -266,8 +284,11 @@ def get_average_matrix(subset, paths_col, cli_args):
     avg_matrix = np.divide(running_total, divisor_matrix)
     
     # Get variances instead of means if user asked for variances
-    if cli_args.correlate_variances:
+    if cli_args.calculate == "variance":
         avg_matrix = np.var(np.dstack(matrices), axis=-1)
+    elif cli_args.calculate == "effect-size":
+        avg_matrix = {"average": avg_matrix,
+                      "variance": np.var(np.dstack(matrices), axis=-1)}
 
     return avg_matrix
 
@@ -340,6 +361,28 @@ def get_group_avgs_or_vars(group, columns):
     return [group[col].mean(skipna=True) for col in columns.columns.tolist()]
 
 
+def get_groups_avg_var_and_size(cli_args, matr_col):
+    """
+    :param cli_args: argparse namespace with all command-line arguments. This
+                     function uses the group demo and avg arguments, and calls
+                     get_group_variance_matrix.
+    :return: Tuple of 3 dictionaries, each of which maps group numbers to
+             those groups' averages or variances or sizes.
+    """
+    # Return values: 3 dicts mapping group number to its avg, var, or size
+    group_averages, gp_vars, gp_sizes = (dict() for i in range(3))
+
+    # Get each group's avg, var, and size
+    for gp_num in (1, 2):
+        group_str = "group_{}".format(gp_num)
+        group_averages[gp_num] = getattr(cli_args, group_str + "_avg")
+        gp_demo = getattr(cli_args, group_str + "_demo")
+        gp_sizes[gp_num] = len(gp_demo.index)
+        gp_vars[gp_num] = get_group_variance_matrix(gp_demo, cli_args,
+                                                    gp_num, matr_col)
+    return group_averages, gp_vars, gp_sizes
+
+
 def get_group_demographics(cli_args, gp_num, gp_demo_str, parser):
     """
     :param cli_args: argparse namespace with most needed command-line arguments
@@ -355,6 +398,30 @@ def get_group_demographics(cli_args, gp_num, gp_demo_str, parser):
     ), gp_num, cli_args.nan_threshold, parser)
 
 
+def get_group_variance_matrix(gp_demo, cli_args, gp_num, matr_col):
+    """
+    Get group's variance matrix by reading or creating a .nii file
+    :param gp_demo: pandas.DataFrame with a column of paths to .nii files
+    :param cli_args: argparse namespace with all command-line arguments. This
+                     function uses --output and calls get_average_matrix.
+    :param gp_num: Int which is the group's number, either 1 or 2
+    :param matr_col: String naming the column in gp_demo with .nii file paths
+    :return: pandas.DataFrame with the group's variances in a matrix
+    """
+    example = gp_demo[matr_col].iloc[0]
+    gp_var_matrix_file = os.path.join(
+        cli_args.output,
+        "group_{}_variance_matrix{}".format(gp_num, get_2_exts_of(example))
+    )
+    if os.access(gp_var_matrix_file, os.R_OK):
+        gp_var_mx = load_matrix_from(gp_var_matrix_file)
+    else:
+        gp_var_mx = get_average_matrix(gp_demo, matr_col,
+                                       cli_args)["variance"]
+        save_to_cifti2(gp_var_mx, example, gp_var_matrix_file)
+    return gp_var_mx
+
+
 def get_ID_string(subject_series, id_name):
     """
     :param sub: pandas.Series representing a subject
@@ -364,6 +431,18 @@ def get_ID_string(subject_series, id_name):
     id_str = subject_series.get(id_name)
     return (id_str if isinstance(id_str, str)
             else id_str.to_string(index=False))
+
+
+def get_pooled_stdev(gp1_var, gp2_var, gp1_size, gp2_size):
+    """
+    :param gp1_var: Float, the variance of the first group
+    :param gp2_var: Float, the variance of the second group
+    :param gp1_size: Int, the number of subjects in the first group
+    :param gp2_size: Int, the number of subjects in the second group
+    :return: Float, the pooled standard deviation of both groups
+    """
+    return(math.sqrt(((gp1_size - 1) * gp1_var**2 + (gp2_size - 1)
+                       * gp2_var**2) / (gp1_size + gp2_size - 2)))
 
 
 def get_pwd():
@@ -498,6 +577,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                     'demo_sex_v2b', 'ehi_y_ss_scoreb', 'interview_age',
                     'medhx_9a', 'race_ethnicity', 'rel_relationship',
                     'site_id_l']
+    choices_calculate = ["mean", "variance", "effect-size"]
     choices_fill = ["all", "confidence_interval"]
     default_continuous_vars = ['demo_prnt_ed_v2b', 'interview_age', 
                                'rel_group_id', 'rel_relationship']
@@ -558,6 +638,20 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=help_font_size.format("axis", default_text_size_axis)
         )
 
+    def calculate():
+        parser.add_argument(
+            "-calc",
+            "--calculate",
+            choices=choices_calculate,
+            default=choices_calculate[0],
+            help=("By default, subset analysis will calculate correlations "
+                  "between subsets'/groups' average values. Include this "
+                  "flag with 'variance' to correlate the subsets' variances "
+                  "instead, or with 'effect-size' to save subsets' effect size "
+                  "matrices")
+
+        )
+
     # Optional: Specify which columns to match on
     def columns():
         parser.add_argument(
@@ -579,17 +673,6 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=default_continuous_vars,
             help=("All names of columns in the demographics .csv file which "
                   "have continuous instead of categorical data.")
-        )
-
-    def correlate_variances():
-        parser.add_argument(
-            "-cor-var",
-            "--correlate-variances",
-            action="store_true",
-            help=("By default, subset analysis will calculate correlations "
-                  "between subsets'/groups' average values. Include this "
-                  "flag to correlate the subsets' variances instead.")
-
         )
 
     # Optional: Custom logarithmic function for Euclidean distance threshold
@@ -1084,14 +1167,33 @@ def read_file_into_list(filepath):
 
 def rename_exacloud_path(path):
     """
-    Convert valid Exacloud path to valid Rushmore path
+    Convert valid Exacloud path to valid Rushmore path or vice versa
     :param path: String representing a valid file path on Exacloud server
     :return:     String representing a valid file path on Rushmore server
     """
     return (path.replace("mnt/rose/shared", "home/exacloud/lustre1/fnl_lab")
             if "exa" in socket.gethostname() else 
             path.replace("home/exacloud/lustre1/fnl_lab", "mnt/rose/shared"))
-    
+
+
+def save_to_cifti2(matrix_data, example_file, outfile):
+    """
+    Save a numpy array into a cifti2 .nii file by importing an arbitrary cifti2
+    matrix and saving a copy of it with its data replaced by the data of the
+    the new matrix
+    :param matrix_data: numpy.ndarray with data to save into cifti2 file
+    :param example_file: String, the path to a .nii file with the right format
+    :param outfile: String, the path to the output .nii file to save
+    :return: N/A
+    """
+    nii_matrix = nibabel.cifti2.load(example_file)
+    nibabel.cifti2.save(nibabel.cifti2.cifti2.Cifti2Image(
+        dataobj = matrix_data,
+        header = nii_matrix.header,
+        nifti_header = nii_matrix.nifti_header,
+        file_map = nii_matrix.file_map
+    ), outfile)
+
 
 def shuffle_out_subset_of(subset, to_shuffle_out, exclusive_pool):
     """
@@ -1200,25 +1302,6 @@ def valid_float_or_falsy(user_arg):
     except ValueError:
         raise argparse.ArgumentTypeError("{} must be a number"
                                          .format(user_arg))
-
-    """
-    print("user_arg: {}, isnumeric: {}".format(user_arg, user_arg.isnumeric()))
-    return user_arg if user_arg.isnumeric() else (user_arg if not user_arg else None)
-    print("user_arg: {}".format(user_arg))
-    return validate(user_arg, lambda x: float(x) if isinstance(x, str) else x,
-                    lambda y: y if isinstance(y, float) else None,
-                    "{} must be a number or a falsy value")
-    try:
-        if isinstance(user_arg, str):
-            user_arg = float(user_arg)
-        elif not isinstance(user_arg, float):
-            assert not user_arg
-        return user_arg
-    except (TypeError, ValueError, AssertionError):
-        raise argparse.ArgumentTypeError("{} is not a number".format(user_arg))
-    # OR...
-    return user_arg if user_arg.isnumeric() if isinstance(user_arg, str) else not user_arg
-    """
     
 
 def valid_output_dir(path):
@@ -1274,4 +1357,3 @@ def validate(path, is_real, make_valid, err_msg, prepare=None):
     except (OSError, TypeError, AssertionError, ValueError, 
             argparse.ArgumentTypeError):
         raise argparse.ArgumentTypeError(err_msg.format(path))
-
