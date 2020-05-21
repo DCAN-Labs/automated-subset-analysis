@@ -276,8 +276,10 @@ def get_average_matrix(subset, paths_col, cli_args):
 
     # Iteratively add every matrix to the running total
     just_printed = 0
-    for i in range(len(subject_matrix_paths)):
-        next_matrix = load_matrix_from(subject_matrix_paths[i][1])
+    i = 0
+    for subj in subject_matrix_paths:
+        i += 1
+        next_matrix = load_matrix_from(subj[1])
         running_total = np.add(running_total, next_matrix)
         running_total_sq = np.add(running_total_sq, np.square(next_matrix))
         just_printed = display_progress(subset, i, subset_size, just_printed)
