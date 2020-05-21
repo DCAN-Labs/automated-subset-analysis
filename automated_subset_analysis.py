@@ -156,7 +156,7 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
 
         # Validate group variance matrix file paths
         gp_var_file_str = GP_VAR_FILE.format(gp_num)
-        ext = get_2_exts_of(getattr(cli_args, "group_{}_avg".format(gp_num)))
+        ext = get_2_exts_of(GP_AV_FILE.format(gp_num))
         if not getattr(cli_args, gp_var_file_str, None):
             setattr(cli_args, gp_var_file_str, os.path.join(
                         cli_args.output,
