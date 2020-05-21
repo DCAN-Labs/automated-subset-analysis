@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-05-20
+Updated 2020-05-21
 """
 
 ##################################
@@ -139,20 +139,29 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
                                               group_demo_str + "_file", parser)
 
         # Add paths to matrices if the user gave paths in separate .conc file
-        matr_conc = getattr(cli_args, "matrices_conc_{}".format(gp_num), None)
+        matr_conc = getattr(cli_args, GP_MTR_FILE.format(gp_num), None)
         setattr(cli_args, group_demo_str, demographics if not matr_conc else
                 replace_paths_column(demographics, matr_conc))
 
         # Get average matrix for each group
-        group_avg_file_str = "group_{}_avg_file".format(gp_num)
+        group_avg_file_str = GP_AV_FILE.format(gp_num)
         cli_args = add_default_avg_matr_path_to(cli_args, gp_num, parser,
                                                 DEFAULT_DEM_VAR_PCONNS)
         try:
-            valid_readable_file(getattr(cli_args, group_avg_file_str))
+            valid_readable_file(getattr(cli_args, group_avg_file_str, None))
         except argparse.ArgumentTypeError as e:
             parser.error(str(e))
         setattr(cli_args, "group_{}_avg".format(gp_num),
                 load_matrix_from(getattr(cli_args, group_avg_file_str)))
+
+        # Validate group variance matrix file paths
+        gp_var_file_str = GP_VAR_FILE.format(gp_num)
+        ext = get_2_exts_of(getattr(cli_args, "group_{}_avg".format(gp_num)))
+        if not getattr(cli_args, gp_var_file_str, None):
+            setattr(cli_args, gp_var_file_str, os.path.join(
+                        cli_args.output,
+                        "group_{}_variance_matrix{}".format(gp_num, ext)
+                    ))
     return cli_args
 
 
@@ -195,9 +204,7 @@ def skip_subset_generation(cli_args, subsets_file_name):
     """
     Get all subsets that have already been generated if user skipped subset
     generation on this run. If no subset files exist, then terminate the script
-    :param cli_args: argparse namespace with all command-line arguments. This
-                     function uses the --group_1_demo, --group_2_demo, and
-                     --skip_subset_generation arguments.
+    :param cli_args: argparse namespace with all command-line arguments
     :param subsets_file_name: String with the format of subset file names
     :return: List of dictionaries where each has two elements mapping a group
              number to a subset of that group, and also has an element mapping 

@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-05-15
+Updated 2020-05-21
 """
 
 ##################################
@@ -32,6 +32,7 @@ import sys
 GP_AV_FILE = "group_{}_avg_file"
 GP_DEMO_FILE = "group_{}_demo_file"
 GP_MTR_FILE = "matrices_conc_{}"
+GP_VAR_FILE = "group_{}_var_file"
 EXAMPLE_FILE = "example_file"
 MATRIX_COL = "pconn10min"
 
@@ -248,7 +249,8 @@ def get_ASA_arg_names():
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
             "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
-            "graph_title", "hide_legend", "marker_size", "n_analyses",
+            "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
+            "hide_legend", "marker_size", "n_analyses",
             "nan_threshold", "no_matching", "only_make_graphs", "output",
             "parallel", "skip_subset_generation", "spearman_rho", 
             "subset_size", "title_font_size", "y_range", "inverse_fisher_z"]
@@ -269,28 +271,27 @@ def get_average_matrix(subset, paths_col, cli_args):
     # Get one matrix file to initialize the running total matrix & matrix list
     subject_matrix_paths = subset[paths_col].iteritems()
     running_total = load_matrix_from(next(subject_matrix_paths)[1])
+    running_total_sq = np.square(running_total)
     matrices = [running_total.copy()] 
 
     # Iteratively add every matrix to the running total
     just_printed = 0
-    for subj in subject_matrix_paths:
-        matrices.append(load_matrix_from(subj[1]))
-        running_total = np.add(running_total, matrices[-1]) 
-        just_printed = display_progress(subset, len(matrices), subset_size,
-                                        just_printed)
+    for i in range(len(subject_matrix_paths)):
+        next_matrix = load_matrix_from(subject_matrix_paths[i][1])
+        running_total = np.add(running_total, next_matrix)
+        running_total_sq = np.add(running_total_sq, np.square(next_matrix))
+        just_printed = display_progress(subset, i, subset_size, just_printed)
 
     # Divide running total matrix by number of matrices
     divisor_matrix = get_divisor_matrix(running_total.shape, subset_size)
     avg_matrix = np.divide(running_total, divisor_matrix)
+    var_matrix = np.subtract(np.divide(running_total_sq, divisor_matrix),
+                             np.square(avg_matrix))
     
-    # Get variances instead of means if user asked for variances
-    if cli_args.calculate == "variance":
-        avg_matrix = np.var(np.dstack(matrices), axis=-1)
-    elif cli_args.calculate == "effect-size":
-        avg_matrix = {"average": avg_matrix,
-                      "variance": np.var(np.dstack(matrices), axis=-1)}
-
-    return avg_matrix
+    # Return average matrix and/or variance matrix depending on --calculate
+    return {"mean": avg_matrix, "variance": var_matrix, 
+            "effect-size": {"average": avg_matrix, "variance": var_matrix}
+            }[cli_args.calculate]
 
 
 def get_cli_args(script_description, arg_names, pwd, validate_fn=None):
@@ -409,10 +410,7 @@ def get_group_variance_matrix(gp_demo, cli_args, gp_num, matr_col):
     :return: pandas.DataFrame with the group's variances in a matrix
     """
     example = gp_demo[matr_col].iloc[0]
-    gp_var_matrix_file = os.path.join(
-        cli_args.output,
-        "group_{}_variance_matrix{}".format(gp_num, get_2_exts_of(example))
-    )
+    gp_var_matrix_file = getattr(cli_args, GP_VAR_FILE.format(gp_num))
     if os.access(gp_var_matrix_file, os.R_OK):
         gp_var_mx = load_matrix_from(gp_var_matrix_file)
     else:
@@ -602,7 +600,12 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     help_group_avg_file = (
         "Path to a .nii file containing the average matrix for group {0}. "
         "By default, this path will be to group{0}_10min_mean.pconn.nii "
-        "file in this script's parent folder or the output folder."
+        "file in this script's parent folder or the --output folder."
+    )
+    help_group_var_file = (
+        "Path to a .nii file containing the variance matrix for group {0}. "
+        "By default, this path will be to group_{0}_variance_matrix.pconn.nii "
+        "in the --output folder."
     )
     help_matrices_conc = (
         "Path to a .conc file containing only a list of valid paths to group "
@@ -728,7 +731,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   .format(", ".join(default_vis_titles().values())))
         )
 
-    # Optional: Path to average matrix .pconn file for group 1
+    # Optional: Path to average matrix .nii file for group 1
     def group_1_avg_file():
         parser.add_argument(
             "-avg1",
@@ -736,12 +739,28 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=help_group_avg_file.format(1)
         )
 
-    # Optional: Path to average matrix .pconn file for group 2
+    # Optional: Path to average matrix .nii file for group 2
     def group_2_avg_file():
         parser.add_argument(
             "-avg2",
             as_cli_arg(GP_AV_FILE, 2),
             help=help_group_avg_file.format(2)
+        )
+
+    # Optional: Path to matrix variance .nii file for group 1
+    def group_1_var_file():
+        parser.add_argument(
+            "-var1",
+            as_cli_arg(GP_VAR_FILE, 1),
+            help=help_group_var_file.format(1)
+        )
+
+    # Optional: Path to matrix variance .nii file for group 2
+    def group_2_var_file():
+        parser.add_argument(
+            "-var2",
+            as_cli_arg(GP_VAR_FILE, 2),
+            help=help_group_var_file.format(2)
         )
 
     def hide_legend():
