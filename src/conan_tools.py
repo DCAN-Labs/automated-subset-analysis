@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-05-21
+Updated 2020-05-22
 """
 
 ##################################
@@ -329,6 +329,20 @@ def get_confidence_interval(series, confidence=0.95):
                           / np.sqrt(len(series.index)))
     series_mean = series.mean()
     return series_mean - distance_from_mean, series_mean + distance_from_mean
+
+
+def get_correls_between(arr1, arr2, num_subjects, corr=None):
+    """
+    :param arr1: np.ndarray with only numeric values
+    :param arr2: np.ndarray with only numeric values
+    :param num_subjects: Integer, number of subjects in each group
+    :param corr: Function which, given 2 arrays, returns their correlation
+    :return: Dictionary mapping "Subjects" to num_subjects and mapping
+             "Correlation" to the correlation between arr1 and arr2 
+    """
+    if not corr:  # By default, use numpy to return the Pearson's r
+        corr = lambda x, y: np.corrcoef(x, y)[0, 1]
+    return {"Subjects": num_subjects, "Correlation": corr(arr1, arr2)}
 
 
 def get_divisor_matrix(shape, size):
@@ -872,13 +886,12 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             type=valid_readable_file,
             metavar="SUBSET-CORRELATIONS-CSV",
             help=("Include this flag to import data from a .csv file already "
-                  "made by this script instead of making a new one, just to "
-                  "make a graph visualization of already-existing data. If "
-                  "this flag is included, it must be a path to at least one "
-                  "readable .csv file(s) with 2 columns: 'Subjects' (the "
-                  "number of subjects in each subset) and 'Correlation' (the "
-                  "correlation between each randomly generated subset in that "
-                  "pair).")
+                  "made by this script instead of making a new one (only make "
+                  "a graph visualization of existing data). If this flag is "
+                  "included, it must be a path to at least one readable .csv "
+                  "file(s) with 2 columns: 'Subjects' (the number of subjects "
+                  "in each subset) and 'Correlation' (the correlation between "
+                  "each randomly generated subset in that pair).")
         )
 
     # Optional: Output folder
@@ -1101,6 +1114,15 @@ def now():
     return datetime.datetime.now()
 
 
+def other_group_n(gp_num):
+    """
+    :param gp_num: A group's number
+    :return: The other group's number
+    """
+    return ({1: 2, 2: 1}[gp_num] if isinstance(gp_num, int)
+            else {"1": "2", "2": "1"}[gp_num])
+
+
 def print_col_headers_and_get_widths(headers):
     """
     Prints the headers of every column in the chart of generated subsets' chi-
@@ -1165,8 +1187,7 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
                 subset, diff_group, columns.columns.tolist(),
                 cli_args.con_cols, col_widths
             ]
-            keep_looping = loop_check_fn(loops, eu_dist, group_n,
-                                         *extra_args)
+            keep_looping = loop_check_fn(loops, eu_dist, group_n, *extra_args)
             if loops == 2 and keep_looping and not eu_threshold:
                 col_widths = print_col_headers_and_get_widths((
                     "Subset", "Group", "Statistic", "P-Value",
@@ -1312,17 +1333,16 @@ def valid_conc_file(path):
                     valid_readable_file, "{} is not a .conc file.")
 
 
-def valid_float_or_falsy(user_arg):
+def valid_float_or_falsy(usr_arg):
     """
-    :return: True if user_arg is falsy or is a numeric string
+    :return: True if usr_arg is falsy or is a numeric string
     """
     try:
-        if user_arg is not None and user_arg is not False:
-            user_arg = float(user_arg)
-        return user_arg
+        if usr_arg is not None and usr_arg is not False:
+            usr_arg = float(usr_arg)
+        return usr_arg
     except ValueError:
-        raise argparse.ArgumentTypeError("{} must be a number"
-                                         .format(user_arg))
+        raise argparse.ArgumentTypeError("{} must be a number".format(usr_arg))
     
 
 def valid_output_dir(path):

@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-05-21
+Updated 2020-05-22
 """
 
 ##################################
@@ -76,10 +76,9 @@ def main():
         # Get and save correlations or effect sizes, then make visualizations
         correl_fn = (save_subset_effect_size_matrices if cli_args.calculate ==
                      "effect-size" else get_correl_dataframes)
-        for correls_df_name, correls_df in correl_fn(all_subsets,
-                                                     cli_args).items():
+        for corr_df_name, corr_df in correl_fn(all_subsets, cli_args).items():
             if not cli_args.parallel:  # must call correl_fn even if --parallel
-                make_visualization(correls_df, cli_args, correls_df_name)
+                make_visualization(corr_df, cli_args, corr_df_name)
 
     # Print the date and time when this script started and finished running
     print(starting_timestamp)
@@ -155,13 +154,12 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
                 load_matrix_from(getattr(cli_args, group_avg_file_str)))
 
         # Validate group variance matrix file paths
-        gp_var_file_str = GP_VAR_FILE.format(gp_num)
-        ext = get_2_exts_of(GP_AV_FILE.format(gp_num))
-        if not getattr(cli_args, gp_var_file_str, None):
-            setattr(cli_args, gp_var_file_str, os.path.join(
-                        cli_args.output,
-                        "group_{}_variance_matrix{}".format(gp_num, ext)
-                    ))
+        gp_var_f = GP_VAR_FILE.format(gp_num)
+        fname = ("group_{}_variance_matrix{}"
+                 .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
+        if not getattr(cli_args, gp_var_f, None):
+            setattr(cli_args, gp_var_f, os.path.join(cli_args.output, fname))
+            
     return cli_args
 
 
@@ -175,7 +173,7 @@ def replace_paths_column(demographics, matr_conc):
     """
     matrix_paths = pd.read_csv(matr_conc, converters={
         0: rename_exacloud_path
-    }, sep="\n", header=None).rename(columns=lambda x: DEFAULT_DEM_VAR_MATR)
+    }, sep="\n", header=None).rename(columns=lambda x: DEFAULT_DEM_VAR_MATR)    
     matrix_paths[DEFAULT_DEM_VAR_SUBJID] = matrix_paths.apply(lambda x: (
         extract_subject_id_from(x.loc[DEFAULT_DEM_VAR_MATR])
     ), axis="columns")
@@ -284,45 +282,40 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     # Get average correlation from user-defined number of pairs of average
     # matrices of randomly generated subsets
     for i in range(cli_args.n_analyses):
-        for subset_size in cli_args.subset_size:
+        for sub_n in cli_args.subset_size:
             start_time = now()
             print("Making randomly selected subset pair {} out of {} with {} "
-                  "subjects.".format(i + 1, cli_args.n_analyses, subset_size))
+                  "subjects.".format(i + 1, cli_args.n_analyses, sub_n))
 
-            # Iterate over both groups to get a subset of each
+            # Select subsets from each group and get each's average matrix
             subsets = {1: None, 2: None}
             print("Estimated Euclidean distance threshold for statistical "
-                  "significance for subset with {} subjects: {}".format(
-                      subset_size, natural_log(subset_size, cli_args.euclidean)
-                  ))
-
-            # Select subsets and make average matrices from .pconns for each
+                  "significance for subset with {} subjects: {}"
+                  .format(sub_n, natural_log(sub_n, cli_args.euclidean)))
             for group_n in subsets.keys():
                 subsets[group_n] = randomly_select_subset(
                     getattr(cli_args, GP_DEMO_STR.format(group_n)),
-                    group_n, subset_size,
-                    getattr(cli_args,
-                            GP_DEMO_STR.format(1 if group_n == 2 else 2)),
-                    cli_args, check_keep_looping,
-                    natural_log(subset_size, cli_args.euclidean)
+                    group_n, sub_n, getattr(
+                        cli_args, GP_DEMO_STR.format(1 if group_n == 2 else 2)
+                    ), cli_args, check_keep_looping,
+                    natural_log(sub_n, cli_args.euclidean)
                 )
 
             # Save randomly generated subsets
             save_subsets(subsets, cli_args.output, i + 1,
                          subsets_file_name, DEFAULT_DEM_VAR_SUBJID)
-            subsets["subset_size"] = subset_size
+            subsets["subset_size"] = sub_n
             all_subsets.append(subsets)
 
             # Print how long this has taken, and roughly how much time is left
-            progress = update_progress(progress, "making subsets", subset_size,
+            progress = update_progress(progress, "making subsets", sub_n,
                                        start_time)
     return all_subsets
 
 
 def check_keep_looping(loops, eu_dist, gp_n, eu_threshold):
     """ 
-    If a Euclidean distance threshold was given, use it to determine whether to
-    stop randomly generating subsets
+    Use Euclidean threshold to check whether to stop randomly making subsets
     :param loops: Integer which is how many random subsets have been generated
     :param eu_dist: Float which is the Euclidean distance between the latest 
                     randomly generated subset and the total group it is from
@@ -375,8 +368,11 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
         cli_args, get_matr_file_col_name(cli_args)
     )
 
-    # Get effect size matrices for all subset pairs
+
+    # Keep track of how long this function takes, to show the user during loop
     progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
+
+    # Get effect size matrices for all subset pairs
     effect_sizes = dict()
     VAR = "variance"
     AVG = "average"
@@ -390,8 +386,7 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
         for gp_num, subset in sub_pair.items():
 
             # Get group's and subset's variance matrices
-            other_gp = {1: 2, 2: 1}[gp_num]
-            gp_vars_df = pd.DataFrame(gp_vars[other_gp])
+            other_gp = other_group_n(gp_num)
             subset_data[gp_num] = get_average_matrix(
                 subset, get_matr_file_col_name(cli_args), cli_args
             )
@@ -402,8 +397,8 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
             if gp_ids not in effect_sizes:
                 effect_sizes[gp_ids] = []
             effect_sizes[gp_ids] = make_effect_size_matrix(
-                subset_data[gp_num][VAR], gp_vars_df, subset_size,
-                gp_sizes[other_gp], subset_data[gp_num][AVG],
+                subset_data[gp_num][VAR], pd.DataFrame(gp_vars[other_gp]),
+                subset_size, gp_sizes[other_gp], subset_data[gp_num][AVG],
                 group_averages[other_gp], effect_sizes[gp_ids]
             )
 
@@ -449,9 +444,8 @@ def make_effect_size_matrix(sub_vars, var2, sub_size, size2, sub_avg, avg2,
 
     # Ignore invalid division warnings, then replace invalid quotients with 0.0
     with np.errstate(divide="ignore", invalid="ignore"):
-        effect_size_matrix =  np.divide(
-            np.abs(np.subtract(sub_avg, avg2)), pool_stdev
-        ).replace([np.inf, np.nan, -np.inf], 0)
+        effect_size_matrix =  np.divide(np.subtract(sub_avg, avg2), pool_stdev
+                                        ).replace([np.inf, np.nan, -np.inf], 0)
 
     # Collect all effect sizes mapped to their subject size, for visualization
     effect_size_matrix.applymap(lambda x: effect_sizes.append({
@@ -560,20 +554,6 @@ def get_sub_pair_correls(subset_size, correl_lists, subsets, rho=None):
         print("Correlations between average matrices of {}:\n{}"
               .format(title, pprint.pformat(correl_lists[df_name])))
     return correl_lists
-
-
-def get_correls_between(arr1, arr2, num_subjects, corr=None):
-    """
-    :param arr1: np.ndarray with only numeric values
-    :param arr2: np.ndarray with only numeric values
-    :param num_subjects: Integer, number of subjects in each group
-    :param corr: Function which, given 2 arrays, returns their correlation
-    :return: Dictionary mapping "Subjects" to num_subjects and mapping
-             "Correlation" to the correlation between arr1 and arr2 
-    """
-    if not corr:  # By default, use numpy to return the Pearson's r
-        corr = lambda x, y: np.corrcoef(x, y)[0, 1]
-    return {"Subjects": num_subjects, "Correlation": corr(arr1, arr2)}
 
 
 def save_correlations_and_get_df(cli_args, correls_list, correl_file_name):
