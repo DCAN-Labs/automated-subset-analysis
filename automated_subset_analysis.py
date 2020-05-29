@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-05-22
+Updated 2020-05-26
 """
 
 ##################################
@@ -194,7 +194,9 @@ def only_make_graphs(cli_args):
     chdir_to(cli_args.output)
     titles = [k for k in default_vis_titles().keys() if k]
     for correls_csv in cli_args.only_make_graphs:
-        make_visualization(pd.read_csv(correls_csv), cli_args,
+        df = pd.read_csv(correls_csv)
+        df = df.loc[df["Subjects"].isin(cli_args.subset_size)]
+        make_visualization(df, cli_args,
                            get_which_str_in_filename(correls_csv, titles))
 
 
