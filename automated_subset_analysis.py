@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-05-26
+Updated 2020-05-29
 """
 
 ##################################
@@ -363,13 +363,12 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
     For every subset, calculate its effect size matrix and save it to a .csv
     :param all_subsets: List including every pair of subsets
     :param cli_args: argparse namespace with all command-line arguments
-    :return: N/A
+    :return: Dictionary mapping name of subset pair to its effect sizes
     """
     # Get both groups' average matrices, group sizes, and variance matrices
     group_averages, gp_vars, gp_sizes = get_groups_avg_var_and_size(
         cli_args, get_matr_file_col_name(cli_args)
     )
-
 
     # Keep track of how long this function takes, to show the user during loop
     progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
@@ -606,26 +605,25 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     def red(opacity):
         return "rgba(255,0,0,{})".format(opacity)
 
-    # If plotting effect size, add standard deviation
-    if cli_args.calculate == "effect-size":
-        y_metric = "effect size"
-        scatter_plot = []
-
-    # Otherwise make scatter plot mapping subset size to pairwise correlations
-    else:
-        y_metric = "correlation"
+    # Make scatter plot mapping subset size to correlations if user said to
+    y_metric = ("effect size" if cli_args.calculate == "effect-size"
+                else "correlation")
+    if "scatter" in cli_args.plot:  # Round to reduce # of points
+        digits = correls_df["Correlation"].apply(lambda x: len(str(x))-2)
+        scatter_data = correls_df.round(decimals=int(digits.max()**(1/4))
+                                        ).drop_duplicates()
         scatter_plot = [plotly.graph_objs.Scatter(
-            x=correls_df["Subjects"], y=correls_df["Correlation"],
+            x=scatter_data["Subjects"], y=scatter_data["Correlation"],
             name="All {}s".format(y_metric), line_color=red(1),
             marker={"size": cli_args.marker_size}, mode="markers"
-        )]
+        )] 
 
     # Add average lines to plot using averages of each subset size
     avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
                                                 x.unique().sum() / x.nunique())
     last_avg = float(avgs.tail(1).values)
-    stdev = {}  # Add upper & lower bounds of stan dev for effect size
-    if cli_args.calculate == "effect-size":
+    stdev = dict()  # Add upper & lower bounds of stan dev if user said to
+    if "stdev" in cli_args.plot:
         avgs["StDev"] = get_shaded_area_bounds(correls_df, "stdev")
         stdev = {"type": "data", "array": avgs["StDev"], "visible": True}
     avgs_plot = plotly.graph_objs.Scatter(
@@ -643,8 +641,7 @@ def make_visualization(correls_df, cli_args, corr_df_name):
         vis_file = "{}_{}.html".format("".join(vis_title.split()), i)
     print("{}:\n{}".format(vis_title, avgs))
 
-    # Add upper & lower bounds (all data or confidence intervals) of shaded
-    # area to plot as lines
+    # Add upper & lower bounds (all data or CI) of shaded area to plot as lines
     bounds = get_shaded_area_bounds(correls_df, cli_args.fill)
     bounds_params = ({"showlegend": False} if cli_args.fill == "all" else
                      {"name": "95 percent confidence interval",

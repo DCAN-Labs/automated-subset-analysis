@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-05-22
+Updated 2020-05-29
 """
 
 ##################################
@@ -97,7 +97,7 @@ def chdir_to(folder):
 
 def count_digits_of(a_num):
     """
-    :a_num: Numeric value
+    :param a_num: Numeric value
     :return: Integer which is 10 to the power of the number of digits in a_num
     """
     return 10**int(math.log10(a_num))
@@ -250,9 +250,9 @@ def get_ASA_arg_names():
             "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
-            "hide_legend", "marker_size", "n_analyses",
+            "hide_legend", "marker_size", "n_analyses", 
             "nan_threshold", "no_matching", "only_make_graphs", "output",
-            "parallel", "skip_subset_generation", "spearman_rho", 
+            "parallel", "plot", "skip_subset_generation", "spearman_rho", 
             "subset_size", "title_font_size", "y_range", "inverse_fisher_z"]
 
 
@@ -593,6 +593,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                     'site_id_l']
     choices_calculate = ["mean", "variance", "effect-size"]
     choices_fill = ["all", "confidence_interval"]
+    choices_plot = ["scatter", "stdev"]
     default_continuous_vars = ['demo_prnt_ed_v2b', 'interview_age', 
                                'rel_group_id', 'rel_relationship']
     default_dims = (1, 2)
@@ -631,24 +632,21 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
         "column but you want to use different paths."
     )
 
-    # Required: Full list of group 1 demographic data
-    def group_1_demo_file():
+    def group_1_demo_file():  # Required: Full list of group 1 demographic data
         parser.add_argument(
             GP_DEMO_FILE.format(1),
             type=valid_readable_file,
             help=help_demo_file.format(1)
         )
-
-    # Required: Full list of group 2 demographic data
-    def group_2_demo_file():
+    
+    def group_2_demo_file():  # Required: Full list of group 2 demographic data
         parser.add_argument(
             GP_DEMO_FILE.format(2),
             type=valid_readable_file,
             help=help_demo_file.format(2)
         )
 
-    # Optional: Font size of axis text in visualization
-    def axis_font_size():
+    def axis_font_size():  # Optional: Font size of axis text in visualization
         parser.add_argument(
             "-axis",
             "--axis-font-size",
@@ -657,7 +655,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=help_font_size.format("axis", default_text_size_axis)
         )
 
-    def calculate():
+    def calculate():  # Optional: Calculate mean, variance, or effect size
         parser.add_argument(
             "-calc",
             "--calculate",
@@ -671,8 +669,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
 
         )
 
-    # Optional: Specify which columns to match on
-    def columns():
+    def columns():  # Optional: Specify which columns to match on
         parser.add_argument(
             "-c",
             "--columns",
@@ -723,8 +720,8 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help="Path to one of the matrix files inputted to the average."
         )
 
-    # Optional: Choose what to fill in the visualization
-    def fill():
+    
+    def fill():  # Optional: Choose what to shade in the visualization
         parser.add_argument(
             "-f",
             "--fill",
@@ -737,7 +734,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "--fill will be {}.".format(*choices_fill, choices_fill[1]))
         )
 
-    def graph_title():
+    def graph_title():  # Optional: Title at top of visualization
         parser.add_argument(
             "-title",
             "--graph-title",
@@ -770,16 +767,15 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             as_cli_arg(GP_VAR_FILE, 1),
             help=help_group_var_file.format(1)
         )
-
-    # Optional: Path to matrix variance .nii file for group 2
-    def group_2_var_file():
+    
+    def group_2_var_file():  # Optional: Path to matrix variance .nii file for group 2
         parser.add_argument(
             "-var2",
             as_cli_arg(GP_VAR_FILE, 2),
             help=help_group_var_file.format(2)
         )
 
-    def hide_legend():
+    def hide_legend():  # Optional: Exclude legend from visualization
         parser.add_argument(
             "-hide",
             "--hide-legend",
@@ -799,7 +795,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "correlations.")
         )
 
-    def marker_size():
+    def marker_size():  # Optional: Size of data points in output visualization
         parser.add_argument(
             "-marker",
             "--marker-size",
@@ -828,8 +824,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=help_matrices_conc.format(2)
         )
 
-    # Optional: Number of subsets
-    def n_analyses():
+    def n_analyses():  # Optional: Number of subsets
             parser.add_argument(
             "-n",
             "--n-analyses",
@@ -838,8 +833,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help="Number of times to generate and analyze a pair of subsets."
         )
 
-    # Optional: NaN threshold
-    def nan_threshold():
+    def nan_threshold():  # Optional: NaN threshold
 
         def float_between_0_and_1(val):
             """
@@ -865,8 +859,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   .format(default_nan_threshold))
         )
 
-    # Optional: Don't demographically match subsets
-    def no_matching():
+    def no_matching():  # Optional: Don't demographically match subsets
         parser.add_argument(
             "--no-matching",
             action="store_true",
@@ -894,8 +887,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "each randomly generated subset in that pair).")
         )
 
-    # Optional: Output folder
-    def output():
+    def output():  # Optional: Output folder
         parser.add_argument(
             "-out",
             "--output",
@@ -905,8 +897,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "is " + default_out_dir)
         )
         
-    # Optional: Parallel processing boolean flag
-    def parallel():
+    def parallel():  # Optional: Parallel processing boolean flag
         parser.add_argument(
             "--parallel",
             type=valid_readable_file,
@@ -918,8 +909,19 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "correlation values to the same output .csv files.")
         )
 
-    # Optional: Number of subjects in each subset pair
-    def subset_size():
+    def plot():  # Optional: Include data points and/or standard deviations
+        parser.add_argument(
+            "--plot",
+            choices=choices_plot,
+            nargs="*",
+            default=[],
+            help=("By default, a visualization will be made with only the "
+                  "average and confidence interval. Include {} to also plot "
+                  "all of the data points as a scatter plot, and/or {} to "
+                  "also plot standard deviation bars.".format(*choices_plot))
+        )
+   
+    def subset_size():  # Optional: Number of subjects in each subset pair
         parser.add_argument(
             "-subjects",
             "--subset-size",
@@ -958,7 +960,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "parameter.")
         )
 
-
+    # Optional: Correlate with Spearman rho, not Spearman r
     def spearman_rho():
         parser.add_argument(
             "-rho",
@@ -969,8 +971,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "(Pearson's r).")
         )
 
-    # Optional: Custom data range for visualization
-    def y_range():
+    def y_range():  # Optional: Custom data range for visualization
         parser.add_argument(
             "-y",
             "--y-range",

@@ -4,7 +4,7 @@
 Multiple visualization creator
 Greg Conan: conan@ohsu.edu
 Created 2020-05-11
-Updated 2020-05-11
+Updated 2020-05-29
 """
 
 ##################################
@@ -32,7 +32,7 @@ def main():
     args_to_get = [
         GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
         "fill", "hide_legend", "marker_size", "n_analyses", 
-        "output", "subset_size", "title_font_size", "y_range"
+        "output", "plot", "subset_size", "title_font_size", "y_range"
     ]
     cli_args = get_cli_args(
         ("Script to create multiple subset reliability visualizations. Note "
