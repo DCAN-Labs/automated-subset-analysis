@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-05-29
+Updated 2020-06-01
 """
 
 ##################################
@@ -608,15 +608,16 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     # Make scatter plot mapping subset size to correlations if user said to
     y_metric = ("effect size" if cli_args.calculate == "effect-size"
                 else "correlation")
+    scatter_plot = []
     if "scatter" in cli_args.plot:  # Round to reduce # of points
         digits = correls_df["Correlation"].apply(lambda x: len(str(x))-2)
         scatter_data = correls_df.round(decimals=int(digits.max()**(1/4))
                                         ).drop_duplicates()
-        scatter_plot = [plotly.graph_objs.Scatter(
+        scatter_plot.append(plotly.graph_objs.Scatter(
             x=scatter_data["Subjects"], y=scatter_data["Correlation"],
             name="All {}s".format(y_metric), line_color=red(1),
             marker={"size": cli_args.marker_size}, mode="markers"
-        )] 
+        )) 
 
     # Add average lines to plot using averages of each subset size
     avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
@@ -662,7 +663,6 @@ def make_visualization(correls_df, cli_args, corr_df_name):
             "layout": get_plot_layout(get_layout_args(cli_args, correls_df,
                                                       vis_title, last_avg))
         }, image="png", filename=vis_file)
-    print("Saving .png image of {} offline using browser.".format(vis_file))
 
 
 def get_layout_args(cli_args, correls_df, title, last_avg):

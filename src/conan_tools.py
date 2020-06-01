@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-05-29
+Updated 2020-06-01
 """
 
 ##################################
@@ -593,7 +593,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                     'site_id_l']
     choices_calculate = ["mean", "variance", "effect-size"]
     choices_fill = ["all", "confidence_interval"]
-    choices_plot = ["scatter", "stdev"]
+    choices_plot = ["scatter", "stdev", []]  # See stackoverflow.com/q/57739309
     default_continuous_vars = ['demo_prnt_ed_v2b', 'interview_age', 
                                'rel_group_id', 'rel_relationship']
     default_dims = (1, 2)
