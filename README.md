@@ -8,8 +8,8 @@ Randomly selects and compares pairs of subsets of data from two groups. `automat
 
 ### Brief Explanation of Steps
 
-1. `automated_subset_analysis.py` accepts demographic data for 2 datasets. For each dataset, it randomly selects a subset which is not significantly different from the other dataset's total demographics.
-1. Once this script has made subsets of both groups, it finds correlations between the average of each subset and the other group. It also finds the correlation between average of both subsets. This process repeats a certain number of times for subsets which include a certain number of subjects. After finding the correlations, the script saves them to `.csv` files.
+1. `automated_subset_analysis.py` accepts demographic data for 2 datasets. For each dataset, it randomly selects many subsets which are not significantly different from the other dataset's total demographics.
+1. Once this script has made subsets of both groups, it finds correlations between the average of each subset and the other group. It also finds the correlation between the averages of both subsets. This process repeats a specified number of times for subsets which include specified numbers of subjects. After finding the correlations, the script saves them to `.csv` files.
 1. All of the correlation values are then plotted as data points on graph visualizations. Those graphs are saved when `automated_subset_analysis` finishes executing.
 
 For a more detailed explanation, see this document's `Explanation of Process` section.
@@ -19,6 +19,8 @@ For a more detailed explanation, see this document's `Explanation of Process` se
 1. [Python 3.5.2](https://www.python.org/downloads/release/python-352) or greater
 
 ### Python Packages
+
+Required non-default packages:
 
 1. `nibabel`
 1. `numpy`
@@ -36,19 +38,24 @@ For a more detailed explanation, see this document's `Explanation of Process` se
 1. `group_2_demo_file` is a path to a text file which contains only a list of paths (1 per line) to the `.nii` files of all subjects in the second group to analyze a subset of.
 
 Example of a basic call to this script:
-```
-csv1=/home/user/conan/data/group1_pconn.csv
-csv2=/home/user/conan/data/group2_pconn.csv
-python3 automated_subset_analysis.py ${csv1} ${csv2}
+
+```sh
+demo1=/home/user/conan/data/group1_pconn.csv
+demo2=/home/user/conan/data/group2_pconn.csv
+python3 automated_subset_analysis.py ${demo1} ${demo2}
 ```
 
 ### Optional Arguments (21)
 
-#### File Paths with Default Values (5)
+#### File Paths with Default Values (7)
 
 1. `--group-1-avg-file` takes one valid path to a readable `.nii` file containing the average matrix for the entire group 1. By default, this path will be to the `group1_10min_mean.pconn.nii` file in this script's parent folder or in the `--output` folder.
 
 1. `--group-2-avg-file` also takes one valid path to a readable `.nii` file, just like `--group-1-avg-file`. By default, it will point to the `group2_10min_mean.pconn.nii` file in one of the same places.
+
+1. `--group-1-var-file` also takes a valid `.nii` file path pointing to group 1's total variance matrix. By default, it will point to the `group1_variance_matrix.*.nii` file in one of the same places.
+
+1. `--group-2-var-file` also takes a valid `.nii` file path pointing to group 2's total variance matrix. By default, it will point to the `group2_variance_matrix.*.nii` file in one of the same places.
 
 1. `--matrices-conc-1` takes one path to a readable `.conc` file containing only a list of valid paths to group 1 matrix files. This flag is only needed if your group 1 demographics `.csv` file either does not have a column labeled `'pconn10min'` with paths to matrix files, or if it does include that column but you want to use different paths.
 
@@ -78,13 +85,13 @@ python3 automated_subset_analysis.py ${csv1} ${csv2}
 - If `--only-make-graphs` is included, then `--skip-subset-generation` will do nothing.
 - Unless the `--only-make-graphs` flag is used, the `.csv` file(s) with subsets' average correlations will/must be called `correlations_sub1_sub2.csv`, `correlations_sub1_all2.csv`, and/or `correlations_sub2_all1.csv`.
 
-#### Visualization Formatting Arguments (7)
+#### Visualization Formatting Arguments (8)
 
 1. `--axis-font-size` takes one positive integer, the font size of the text on both axes of the visualizations that this script will create. If this argument is excluded, then by default, the font size will be `30`.
 
 1. `--fill` takes one parameter, a string that is either `all` or `confidence-interval`. Include this flag to choose which data to shade in the visualization. Choose `all` to shade in the area within the minimum and maximum correlations in the dataset. Choose `confidence-interval` to only shade in the 95% confidence interval of the data. By default, this argument will be `confidence-interval`.
 
-1. `--graph-title` takes one string, the title at the top of all output visualizations and the name of the output `.html` visualization files. Unless this flag is included, each visualization will have one of these default titles:
+1. `--graph-title` takes one string, the title at the top of all output visualizations and the name of the output `.html` visualization files. To break the title into two lines, include `<br>` in the `--graph-title` string. Unless this flag is included, each visualization will have one of these default titles:
     - "Correlations Between Average Subsets"
     - "Group 1 Subset to Group 2 Correlation"
     - "Group 1 to Group 2 Subset Correlation"
@@ -94,6 +101,8 @@ python3 automated_subset_analysis.py ${csv1} ${csv2}
 
 1. `--marker-size` takes one positive integer to determine the size (in pixels) of each data point in the output visualization. The default size is 5.
 
+1. `--plot` By default, a visualization will be made with only the average and confidence interval. Include this flag with the parameter `scatter` to also plot all data points as a scatter plot, and/or with the parameter `stdev` to also plot standard deviation bars for each sample size.
+
 1. `--title-font-size` takes one positive integer. It is just like `--axis-font-size`, except for the title text in the visualizations. This flag determines the size of the title text above the graph as well as both axis labels. If this argument is excluded, then by default, the font size will be `40`.
 
 1. `--y-range` takes two floating-point numbers, the minimum and maximum values to be displayed on the y-axis of the graph visualizations that this script will create. By default, this script will automatically set the y-axis boundaries to show all of the correlation values and nothing else.
@@ -101,11 +110,12 @@ python3 automated_subset_analysis.py ${csv1} ${csv2}
 #### Other Flags (5)
 
 1. `--columns` takes one or more strings. Each should be the name of a column in the demographics `.csv` which contains numerical data to include in the subset correlations analysis. By default, the script will assume that both input demographics `.csv` files have columns of numerical data with these names:
+
     ```
     demo_comb_income_v2b, demo_ed_v2, demo_prnt_ed_v2b, demo_sex_v2b, ehi_y_ss_scoreb interview_age, medhx_9a, race_ethnicity, rel_relationship, site_id_l
     ```
 
-1. `--correlate-variances` takes no parameters. By default, subset analysis will calculate correlations between subsets'/groups' average values. Include this flag to correlate the subsets' variances instead.
+1. `--calculate` takes one string to define the output metric. With its default value of `mean`, the subset analysis will calculate correlations between subsets'/groups' average values. Use `--calculate variance` to correlate the subsets' variances instead, or `--calculate effect-size` to measure the effect size of the difference between each subset and the total group. 
 
 1. `--inverse-fisher-z` takes no parameters. Include this flag to do an inverse Fisher-Z transformation on the matrices imported from the `.pconn` files of the data before getting correlations.
 
@@ -123,14 +133,14 @@ For more information, including the shorthand flags for each option, run this sc
 
 Generate 50 subsets and save a `.csv` file of each, including 10 subsets each of sizes 50, 100, 300, 500, and 1000:
 
-```
-python3 automated_subset_analysis.py ${csv1} ${csv2} --subset-size 50 100 300 500 1000 --n-analyses 10
+```sh
+python3 automated_subset_analysis.py ${demo1} ${demo2} --subset-size 50 100 300 500 1000 --n-analyses 10
 ```
 
 Calculate the correlations between average matrices of already-generated subsets in the `./subsets/` folder, then save the correlations and a visualization of them to the `./correls/` folder:
 
-```
-python3 automated_subset_analysis.py ${csv1} ${csv2} --skip-subset-generation ./subsets/ --output ./correls/
+```sh
+python3 automated_subset_analysis.py ${demo1} ${demo2} --skip-subset-generation ./subsets/ --output ./correls/
 ```
 
 ## Explanation of Process
@@ -145,16 +155,20 @@ Once the correlation `.csv` files are made, the script will make a graph visuali
 
 ### Notes
 
-<sup>1</sup> The equation currently used in `automated_subset_analysis.py` to predict significant Euclidean distance threshold using subset size was found using this function call:
-```
+<sup>1</sup> The equation currently used in `automated_subset_analysis.py` to predict significant Euclidean distance threshold using subset size was found using this Bash code:
+
+```sh
 python3 ./src/euclidean_threshold_estimator.py ./raw/ABCD_2.0_group1_data_10minpconns.csv ./raw/ABCD_2.0_group2_data_10minpconns.csv -con-vars ./automated_subset_analysis_files/continuous_variables.csv --subset-size 1300 1200 1100 1000 900 800 700 600 500 400 300 200 100 90 80 70 60 50 --n-analyses 10
 ```
+
 The data used to calculate that equation can be found in `./src/euclidean_threshold_estimate_data/est-eu-thresh-2019-12-12`.
 
 <sup>2</sup> The output visualization will include:
-1. Each correlation value as 1 data point,
+
 1. A trendline using the average correlation values of each subset size,
-1. A shaded region showing a certain data range (confidence interval or all data), and
+1. A shaded region showing a certain data range (confidence interval or all data),
+1. Each correlation value as 1 data point (if `--plot` includes `scatter`),
+1. Standard deviation bars above and below each data point (if `--plot` includes `stdev`), and
 1. A legend to identify all of these parts (unless `--hide-visualization` is used).
 
 ## Metadata
@@ -162,4 +176,4 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Updated by Greg Conan, 2020-02-06
+- Updated by Greg Conan, 2020-06-05

@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-06-01
+Updated 2020-06-05
 """
 
 ##################################
@@ -143,18 +143,15 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
                 replace_paths_column(demographics, matr_conc))
 
         # Get average matrix for each group
-        group_avg_file_str = GP_AV_FILE.format(gp_num)
-        cli_args = add_default_avg_matr_path_to(cli_args, gp_num, parser,
-                                                DEFAULT_DEM_VAR_PCONNS)
-        try:
-            valid_readable_file(getattr(cli_args, group_avg_file_str, None))
-        except argparse.ArgumentTypeError as e:
-            parser.error(str(e))
-        setattr(cli_args, "group_{}_avg".format(gp_num),
-                load_matrix_from(getattr(cli_args, group_avg_file_str)))
+        gp_av_arg = GP_AV_FILE.format(gp_num)
+        cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
+                                            DEFAULT_DEM_VAR_PCONNS, gp_av_arg)
 
         # Validate group variance matrix file paths
         gp_var_f = GP_VAR_FILE.format(gp_num)
+        cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
+                                            DEFAULT_DEM_VAR_PCONNS, gp_var_f)
+
         fname = ("group_{}_variance_matrix{}"
                  .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
         if not getattr(cli_args, gp_var_f, None):
@@ -278,7 +275,8 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     :return: List of dictionaries, each of which maps a subset's group number
              to the subset for one pair of subsets
     """
-    all_subsets = []  # Return value: List of subsets
+    # List of subsets to return, and progress tracker to estimate time left
+    all_subsets = []
     progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
 
     # Get average correlation from user-defined number of pairs of average
@@ -417,8 +415,7 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
     # Save subset-size-to-effect-size lists as .csv files then return them
     for gp_id, dicts_list in effect_sizes.items():
         effect_sizes[gp_id] = save_correlations_and_get_df(
-            cli_args, dicts_list,
-            os.path.join(cli_args.output, "effect_sizes_{}.csv".format(gp_id)),
+            cli_args, dicts_list, "effect_sizes_{}.csv".format(gp_id)
         )
     return effect_sizes
 
@@ -512,7 +509,7 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
     :return: Dictionary matching each group's number to its subset's average
              matrix from .pconn files of all its subjects
     """
-    avg_matrices = {}  # Return value: Average matrices of both groups
+    avg_matrices = dict()  # Return value: Average matrices of both groups
     sub_size = subsets_dict.pop("subset_size")  # Number of subjects per group
 
     # Get all data from .pconn files of every subject in the subset
@@ -623,7 +620,9 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     avgs = correls_df.groupby(["Subjects"]).agg(lambda x: 
                                                 x.unique().sum() / x.nunique())
     last_avg = float(avgs.tail(1).values)
-    stdev = dict()  # Add upper & lower bounds of stan dev if user said to
+
+    # Add upper and lower bounds of standard deviation bars if user said to
+    stdev = dict()  
     if "stdev" in cli_args.plot:
         avgs["StDev"] = get_shaded_area_bounds(correls_df, "stdev")
         stdev = {"type": "data", "array": avgs["StDev"], "visible": True}
@@ -706,6 +705,7 @@ def get_shaded_area_bounds(all_data_df, to_fill):
             lambda x: x.quantile(quantile)
         )["Correlation"]
 
+    # Calculate bounds of shaded area depending on which area to_fill
     if to_fill == "all":
         result = (aggregate_data(0), aggregate_data(1))
     elif to_fill == "confidence_interval":

@@ -37,9 +37,9 @@ EXAMPLE_FILE = "example_file"
 MATRIX_COL = "pconn10min"
 
 
-def add_default_avg_matr_path_to(cli_args, gp_num, parser, default):
+def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
     """
-    Get paths to average matrices for each group, if not given
+    Get and validate path to a group's average or variance matrix, if not given
     :param cli_args: argparse namespace with most needed command-line
                      arguments. This function uses the --matrices-conc-{} and
                      --example-file arguments, but only the former is required
@@ -47,14 +47,15 @@ def add_default_avg_matr_path_to(cli_args, gp_num, parser, default):
     :param parser: argparse ArgumentParser to raise error if anything's invalid
     :param default: String naming the demographic data spreadsheet's column
                     with all of the paths to matrix files
-    :return: cli_args, but with the group_{}_avg_file argument for group gp_num
+    :param gp_file_arg: String naming the cli_args attribute to add to cli_args
+    :return: cli_args, but with the gp_file_arg argument for group gp_num
     """
-    gp_avg_arg = GP_AV_FILE.format(gp_num)
-    if not getattr(cli_args, gp_avg_arg, None):
+    result_file_path = getattr(cli_args, gp_file_arg, None)
+    if not result_file_path:
         matr_conc = getattr(cli_args, GP_MTR_FILE.format(gp_num))
         if not matr_conc:
             parser.error("Please provide the {} argument or the {} argument. "
-                         .format(as_cli_arg(GP_AV_FILE.format(gp_num)),
+                         .format(as_cli_arg(gp_file_arg.format(gp_num)),
                                  as_cli_arg(GP_MTR_FILE.format(gp_num))))
         example = getattr(cli_args, EXAMPLE_FILE, None)
         if not example:
@@ -65,11 +66,16 @@ def add_default_avg_matr_path_to(cli_args, gp_num, parser, default):
                          "--example-file argument.".format(as_cli_arg(
                             GP_MTR_FILE.format(gp_num)
                          )))
-        setattr(cli_args, gp_avg_arg, os.path.join(cli_args.output, "".join((
+        result_file_path = os.path.join(cli_args.output, "".join((
             os.path.splitext(os.path.basename(matr_conc))[0],
-            "_AVG", get_2_exts_of(example)
-        ))))
-    return cli_args
+            gp_file_arg.split("_")[-2], get_2_exts_of(example)
+        )))
+        setattr(cli_args, gp_file_arg, result_file_path)
+    try:
+        valid_readable_file(result_file_path)
+        return cli_args
+    except argparse.ArgumentTypeError as e:
+        parser.error(str(e))
 
 
 def as_cli_arg(arg_str, gp_num=None):
@@ -609,21 +615,17 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     # Help messages used by multiple input parameters
     help_demo_file = ("Path to a .csv file containing all demographic "
                       "information about the subjects in group {}.")
-    help_font_size = (
-        "Font size of {0} text in visualization. Enter a positive integer for "
-        "this argument. If it is excluded, then the default {0} font size "
-        "will be {1}."
-    )
-    help_group_avg_file = (
-        "Path to a .nii file containing the average matrix for group {0}. "
-        "By default, this path will be to group{0}_10min_mean.pconn.nii "
-        "file in this script's parent folder or the --output folder."
-    )
-    help_group_var_file = (
-        "Path to a .nii file containing the variance matrix for group {0}. "
-        "By default, this path will be to group_{0}_variance_matrix.pconn.nii "
-        "in the --output folder."
-    )
+    help_font_size = ("Font size of {0} text in visualization. Enter a "
+                      "positive integer for this argument. If it is excluded, "
+                      "then the default {0} font size will be {1}.")
+    help_group_avg_or_var = ("Path to a .nii file containing the {1} matrix "
+                             "for group {0}. By default, this path will be to "
+                             "group{0}_{2}.pconn.nii file in this script's "
+                             "parent folder or the --output folder.")
+    help_group_avg_file = help_group_avg_or_var.format("{0}", "average",
+                                                       "10min_mean")
+    help_group_var_file = help_group_avg_or_var.format("{0}", "variance",
+                                                       "variance_matrix")
     help_matrices_conc = (
         "Path to a .conc file containing only a list of valid paths to group "
         "{0} matrix files. This flag is only needed if your group {0} "
@@ -663,10 +665,8 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=choices_calculate[0],
             help=("By default, subset analysis will calculate correlations "
                   "between subsets'/groups' average values. Include this "
-                  "flag with 'variance' to correlate the subsets' variances "
-                  "instead, or with 'effect-size' to save subsets' effect size "
-                  "matrices")
-
+                  "flag with 'variance' to correlate the subsets' variances, "
+                  "or with 'effect-size' for their effect sizes, instead.")
         )
 
     def columns():  # Optional: Specify which columns to match on
@@ -917,8 +917,9 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=[],
             help=("By default, a visualization will be made with only the "
                   "average and confidence interval. Include {} to also plot "
-                  "all of the data points as a scatter plot, and/or {} to "
-                  "also plot standard deviation bars.".format(*choices_plot))
+                  "all data points as a scatter plot, and/or {} to also plot "
+                  "standard deviation bars.".format(choices_plot[0],
+                                                    choices_plot[1]))
         )
    
     def subset_size():  # Optional: Number of subjects in each subset pair
@@ -1180,10 +1181,8 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
             print("Too much missing data, skipping to next.")
         else:
 
-            # Get Euclidean distance
-            eu_dist = distance.euclidean(group_avgs, sub_avgs)
-
             # Check significance of Euclidean distance, and show user
+            eu_dist = distance.euclidean(group_avgs, sub_avgs)
             extra_args = [eu_threshold] if eu_threshold else [
                 subset, diff_group, columns.columns.tolist(),
                 cli_args.con_cols, col_widths
