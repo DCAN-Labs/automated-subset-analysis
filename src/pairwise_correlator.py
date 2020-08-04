@@ -117,8 +117,7 @@ def correlate_pairwise(all_IDs, matrix_paths, cli_args):
     # Correlate every matrix with its corresponding matrix
     for i in range(num_subjs):
         for j in (matrix_paths.keys()):
-            mx_pair[j] = load_matrix_from(getattr(cli_args,
-                                                  GP_MTR_FILE.format(j)))
+            mx_pair[j] = load_matrix_from(matrix_paths[j][i])
         correls[all_IDs[i]] = corr_fn(mx_pair[1], mx_pair[2])
         if not i % count_digits_of(i):
             progress = update_progress(
