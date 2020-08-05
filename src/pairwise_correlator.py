@@ -42,8 +42,11 @@ def main():
 
     # Import each subject's matrices from both .conc files and compare them
     all_IDs, matrix_paths = import_concs(cli_args)
-    all_correls = correlate_pairwise(all_IDs, matrix_paths, cli_args)
-    print(all_correls)
+    correlate_pairwise(all_IDs, matrix_paths, cli_args)
+
+    # Save all correlations into a .csv file
+    # save_into_csv(cli_args.output, all_correls)
+    
 
 
 def validate_cli_args(cli_args, parser):
@@ -114,17 +117,32 @@ def correlate_pairwise(all_IDs, matrix_paths, cli_args):
     progress = track_progress(1, [1] * num_subjs)  # Estimate time this'll take
     started_at = now()  # Timestamp where matrix correlation started
 
-    # Correlate every matrix with its corresponding matrix
+    # Correlate every matrix with its corresponding matrix and write to file
+    filepath = os.path.join(cli_args.output, "correlations.csv")
+    with open(filepath, 'w+') as outfile:  # Clear file contents
+        outfile.write("Subject ID,Correlation\n")
     for i in range(num_subjs):
         for j in (matrix_paths.keys()):
             mx_pair[j] = load_matrix_from(matrix_paths[j][i])
-        correls[all_IDs[i]] = corr_fn(mx_pair[1], mx_pair[2])
-        if not i % count_digits_of(i):
+        correl = corr_fn(mx_pair[1], mx_pair[2]) # correls[all_IDs[i]] = corr_fn(mx_pair[1], mx_pair[2])
+        print("Subject {}'s correlation is {}"
+              .format(all_IDs[i], correl)) # s[all_IDs[i]]))
+        with open(filepath, "a+") as outf:
+            outf.write("{},{}\n".format(all_IDs[i], correl))
+        if not (i+1) % count_digits_of(i+1):
             progress = update_progress(
                 progress, "calculating pairwise correlations", 1, started_at
             )
-    return correls
-        
+    # return correls
+
+
+def save_into_csv(out_dir, correls, fname="correlations.csv"):
+    to_write = ["{},{}".format(subjid, correls[subjid]) for subjid in correls.keys()]
+    with open(os.path.join(out_dir, fname), "w+") as outfile:
+        outfile.write("Subject ID,Correlation\n" + "\n".join(to_write))
+         
+
+
 
 if __name__ == "__main__":
     main()
