@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-06-01
+Updated 2020-08-05
 """
 
 ##################################
@@ -26,7 +26,7 @@ import random
 from scipy import stats
 from scipy.spatial import distance
 import socket
-import sys
+import sys 
 
 # Constants: Names of common automated_subset_analysis argparse parameters
 GP_AV_FILE = "group_{}_avg_file"
@@ -35,6 +35,10 @@ GP_MTR_FILE = "matrices_conc_{}"
 GP_VAR_FILE = "group_{}_var_file"
 EXAMPLE_FILE = "example_file"
 MATRIX_COL = "pconn10min"
+
+# Constants: Base of paths on specific servers
+PATH_EXA = "home/exacloud/lustre1/fnl_lab"
+PATH_RUSH = "mnt/rose/shared"
 
 
 def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
@@ -278,7 +282,6 @@ def get_average_matrix(subset, paths_col, cli_args):
     subject_matrix_paths = subset[paths_col].iteritems()
     running_total = load_matrix_from(next(subject_matrix_paths)[1])
     running_total_sq = np.square(running_total)
-    matrices = [running_total.copy()] 
 
     # Iteratively add every matrix to the running total
     just_printed = 0
@@ -732,6 +735,14 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "correlations in the dataset. Choose {} to only shade in the "
                   "95 percent confidence interval of the data. By default, "
                   "--fill will be {}.".format(*choices_fill, choices_fill[1]))
+        )
+
+    def correls_csv():
+        parser.add_argument(
+            "-correls", "--correls-csv",
+            type=lambda x: os.path.splitext(x)[-1] == ".csv",
+            default=("Path to .csv file with correlation values between two "
+                     "connectivity matrices for each subject.")
         )
 
     def graph_title():  # Optional: Title at top of visualization
@@ -1213,9 +1224,9 @@ def rename_exacloud_path(path):
     :param path: String representing a valid file path on Exacloud server
     :return:     String representing a valid file path on Rushmore server
     """
-    return (path.replace("mnt/rose/shared", "home/exacloud/lustre1/fnl_lab")
+    return (path.replace(PATH_RUSH, PATH_EXA)
             if "exa" in socket.gethostname() else 
-            path.replace("home/exacloud/lustre1/fnl_lab", "mnt/rose/shared"))
+            path.replace(PATH_EXA, PATH_RUSH))
 
 
 def save_to_cifti2(matrix_data, example_file, outfile):
