@@ -4,7 +4,7 @@
 Pairwise Correlator
 Greg Conan: gconan@umn.edu
 Created 2020-08-03
-Updated 2020-08-10
+Updated 2020-08-14
 """
 
 ##################################
@@ -32,10 +32,8 @@ import warnings
 # Constants: Meanings of demographic data values, this script's parent folder,
 # and the name of the demographic .csv column with subject IDs
 DATA_LABELS = {
-    "site_id_l": "Site ID",
-    "demo_sex_v2b": "Sex",
-    "interview_age": "Age in Months at Interview",
-    "race_ethnicity": "Race/Ethnicity",
+    "site_id_l": "Site ID", "race_ethnicity": "Race/Ethnicity",
+    "interview_age": "Age in Months at Interview", "demo_sex_v2b": "Sex", 
     "demo_prnt_ed_v2b": "Highest Grade Level Passed by Parent"
 }
 DATA_VALUES = {
@@ -168,7 +166,9 @@ def correlate_pairwise(all_IDs, matrix_paths, cli_args):
     started_at = now()  # Timestamp where matrix correlation started
 
     # Correlate every matrix with its corresponding matrix and write to file
-    filepath = cli_args.only_make_graphs[0]
+    filepath = cli_args.only_make_graphs[0] if cli_args.only_make_graphs else (
+        os.path.join(cli_args.output, "correlations_out_{}.csv".format(now()))
+    ).replace(" ", "-").replace("\\", "-").replace(":", "_").replace(".", "-")
     if not os.path.exists(filepath):  # Make a new file if one doesn't exist
         with open(filepath, 'w+') as outfile: 
             outfile.write("Subject ID,Correlation\n")
