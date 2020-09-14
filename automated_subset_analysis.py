@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-06-05
+Updated 2020-09-14
 """
 
 ##################################
@@ -146,16 +146,18 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
         gp_av_arg = GP_AV_FILE.format(gp_num)
         cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
                                             DEFAULT_DEM_VAR_PCONNS, gp_av_arg)
+        setattr(cli_args, "group_{}_avg".format(gp_num),
+                load_matrix_from(getattr(cli_args, gp_av_arg)))
 
         # Validate group variance matrix file paths
-        gp_var_f = GP_VAR_FILE.format(gp_num)
-        cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
-                                            DEFAULT_DEM_VAR_PCONNS, gp_var_f)
-
-        fname = ("group_{}_variance_matrix{}"
-                 .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
-        if not getattr(cli_args, gp_var_f, None):
-            setattr(cli_args, gp_var_f, os.path.join(cli_args.output, fname))
+        if cli_args.calculate in ("variance", "effect-size"):
+            gp_var_f = GP_VAR_FILE.format(gp_num)
+            cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
+                                                DEFAULT_DEM_VAR_PCONNS, gp_var_f)
+            fname = ("group_{}_variance_matrix{}"
+                    .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
+            if not getattr(cli_args, gp_var_f, None):
+                setattr(cli_args, gp_var_f, os.path.join(cli_args.output, fname))
             
     return cli_args
 
@@ -306,8 +308,6 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
                          subsets_file_name, DEFAULT_DEM_VAR_SUBJID)
             subsets["subset_size"] = sub_n
             all_subsets.append(subsets)
-
-            # Print how long this has taken, and roughly how much time is left
             progress = update_progress(progress, "making subsets", sub_n,
                                        start_time)
     return all_subsets
@@ -491,8 +491,6 @@ def get_correl_dataframes(all_subsets, cli_args):
         subset_size = sub_pair.pop("subset_size")
         correl_lists = get_sub_pair_correls(subset_size, correl_lists, subsets,
                                             cli_args.spearman_rho)
-
-        # Print how long this has taken, and roughly how much time is left
         progress = update_progress(progress, "making average matrices",
                                    subset_size, start_time)
     return {name: save_correlations_and_get_df(
@@ -606,10 +604,13 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     y_metric = ("effect size" if cli_args.calculate == "effect-size"
                 else "correlation")
     scatter_plot = []
-    if "scatter" in cli_args.plot:  # Round to reduce # of points
-        digits = correls_df["Correlation"].apply(lambda x: len(str(x))-2)
-        scatter_data = correls_df.round(decimals=int(digits.max()**(1/4))
-                                        ).drop_duplicates()
+    if "scatter" in cli_args.plot:
+        if cli_args.rounded_scatter: # Round to reduce # of points
+            digits = correls_df["Correlation"].apply(lambda x: len(str(x))-2)
+            scatter_data = correls_df.round(decimals=int(digits.max()**(1/4))
+                                            ).drop_duplicates()
+        else:
+            scatter_data = correls_df
         scatter_plot.append(plotly.graph_objs.Scatter(
             x=scatter_data["Subjects"], y=scatter_data["Correlation"],
             name="All {}s".format(y_metric), line_color=red(1),
@@ -634,7 +635,8 @@ def make_visualization(correls_df, cli_args, corr_df_name):
     # Get and display the visualization title, and averages
     vis_title = (cli_args.graph_title if cli_args.graph_title
                  else default_vis_titles()[corr_df_name])
-    vis_file = "".join(vis_title.replace("<br>", "_").split()) + ".html"
+    vis_file = "".join(vis_title.replace("<br>", "_").replace("/", "_").split()
+                       ) + ".html"
     i = 1
     while os.access(vis_file, os.R_OK):
         i += 1
@@ -677,10 +679,11 @@ def get_layout_args(cli_args, correls_df, title, last_avg):
     y_axis_min, y_axis_max = cli_args.y_range if cli_args.y_range else (
         correls_df["Correlation"].min(), correls_df["Correlation"].max()
     )
-    return (y_axis_min, y_axis_max, title, last_avg, cli_args.title_font_size,
-            cli_args.axis_font_size, correls_df["Subjects"].mean(),
-            not cli_args.hide_legend, "Effect Size (d)" if cli_args.calculate
-            == "effect-size" else "Correlation (r)")
+    return (y_axis_min, y_axis_max, title, cli_args.place_legend,
+            cli_args.title_font_size, cli_args.axis_font_size,
+            correls_df["Subjects"].mean(), not cli_args.hide_legend,
+            ("Effect Size (d)" if cli_args.calculate == "effect-size"
+             else "Correlation (r)"))
 
 
 def get_shaded_area_bounds(all_data_df, to_fill):
@@ -733,7 +736,7 @@ def get_plot_layout(args):
     # Local variables from unpacked list of args to use in layout: 
     # Lowest and highest y-values to show, graph title, last y-value to show,
     # graph title and axis title font sizes, average subset size, y-axis title
-    y_min, y_max, title, last_y, ttl_size, axis_font, x_avg, show, y_ttl = args
+    y_min, y_max, title, lgnd_y, ttl_size, axis_font, x_avg, show, y_ttl = args
 
     # Others: RGBA colors as well as space buffer above y_max and below y_min
     black = "rgb(0, 0, 0)"
@@ -759,9 +762,7 @@ def get_plot_layout(args):
     return {"title": {"text": title, "x": 0.5, "xanchor": "center",
                       "font": {"size": ttl_size}},
             "paper_bgcolor": white, "plot_bgcolor": white, "showlegend": show,
-            "legend": {"font": {"size": axis_font}, "x": 0.5,
-                       # Place the legend in white space away from the graph
-                       "y": 0.9 if last_y < ((y_max + y_min) / 2) else 0.1},
+            "legend": {"font": {"size": axis_font}, "x": 0.5, "y": lgnd_y},
             "xaxis": get_axis_layout(
                 title_txt="Sample Size (n)", tick0=0, tickmode="linear",
                 dtick=count_digits_of(x_avg)
@@ -774,3 +775,4 @@ def get_plot_layout(args):
 
 if __name__ == '__main__':
     main()
+

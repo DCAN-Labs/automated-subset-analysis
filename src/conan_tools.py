@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-08-05
+Updated 2020-09-14
 """
 
 ##################################
@@ -65,7 +65,7 @@ def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
         if not example:
             with open(matr_conc) as matr_conc_file_obj:
                 example = matr_conc_file_obj.readline().strip()
-        else:
+        if not os.path.exists(example):
             parser.error("Please provide the {} argument or the "
                          "--example-file argument.".format(as_cli_arg(
                             GP_MTR_FILE.format(gp_num)
@@ -260,10 +260,11 @@ def get_ASA_arg_names():
             "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
-            "hide_legend", "marker_size", "n_analyses", 
-            "nan_threshold", "no_matching", "only_make_graphs", "output",
-            "parallel", "plot", "skip_subset_generation", "spearman_rho", 
-            "subset_size", "title_font_size", "y_range", "inverse_fisher_z"]
+            "hide_legend", "marker_size", "n_analyses", "nan_threshold",
+            "no_matching", "only_make_graphs", "output", "place_legend", 
+            "parallel", "plot", "rounded_scatter", "skip_subset_generation",
+            "spearman_rho", "subset_size", "title_font_size", "y_range",
+            "inverse_fisher_z"]
 
 
 def get_average_matrix(subset, paths_col, cli_args):
@@ -844,23 +845,12 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help="Number of times to generate and analyze a pair of subsets."
         )
 
+ 
     def nan_threshold():  # Optional: NaN threshold
-
-        def float_between_0_and_1(val):
-            """
-            :param val: Object to check, then throw an error if it is invalid
-            :return: val if it is a float between 0 and 1 (otherwise invalid)
-            """
-            float_val = float(val)
-            if 0 < float_val < 1:
-                return float_val
-            else:
-                parser.error("NaN threshold must be a number between 0 and 1.")
-
         parser.add_argument(
             "-nan",
             "--nan-threshold",
-            type=float_between_0_and_1,
+            type=valid_float_0_to_1,
             default=default_nan_threshold,
             help=("Enter a number between 0 and 1. If the percentage of rows "
                   "with NaN values in the data for either demographic file is "
@@ -907,7 +897,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=("Path to folder to save subset data in. The default folder "
                   "is " + default_out_dir)
         )
-        
+
     def parallel():  # Optional: Parallel processing boolean flag
         parser.add_argument(
             "--parallel",
@@ -918,6 +908,17 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "automated_subset_analysis script. This argument will let "
                   "multiple running instances of this script append "
                   "correlation values to the same output .csv files.")
+        )
+
+    def place_legend():  # Optional: Choose where to put legend
+        parser.add_argument(
+            "-legend",
+            "--place-legend",
+            type=valid_float_0_to_1,
+            default=0.05,
+            help=("Choose where to put the legend in the output "
+                  "visualization. Give one number between 0 and 1 to place "
+                  "the legend on the visualization y-axis.")
         )
 
     def plot():  # Optional: Include data points and/or standard deviations
@@ -933,6 +934,17 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                                                     choices_plot[1]))
         )
    
+
+    def rounded_scatter():  # Optional: Fewer points in scatter plot
+        parser.add_argument(
+            "-round",
+            "--rounded-scatter",
+            action="store_true",
+            help=("Include this flag to reduce the total number of data "
+                  "points included in a scatter plot visualization by only "
+                  "including points at rounded intervals.")
+         )
+
     def subset_size():  # Optional: Number of subjects in each subset pair
         parser.add_argument(
             "-subjects",
@@ -1342,6 +1354,15 @@ def valid_conc_file(path):
     """
     return validate(path, lambda x: os.path.splitext(x)[1] == ".conc",
                     valid_readable_file, "{} is not a .conc file.")
+
+
+def valid_float_0_to_1(val):
+    """
+    :param val: Object to check, then throw an error if it is invalid
+    :return: val if it is a float between 0 and 1 (otherwise invalid)
+    """
+    return validate(val, lambda x: 0 < float(x) < 1, float,
+                    "Value must be a number between 0 and 1.")
 
 
 def valid_float_or_falsy(usr_arg):
