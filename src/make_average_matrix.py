@@ -4,7 +4,7 @@
 Average matrix creation for automated subset analysis script
 Greg Conan: conan@ohsu.edu
 Created 2019-11-20
-Last Updated 2020-05-13
+Updated 2020-09-11
 """
 
 ##################################
@@ -26,7 +26,6 @@ import sys
 
 # Constants
 PWD = get_pwd()
-DEFAULT_DEM_VAR_PCONNS = "pconn10min"
 
 
 def main():
@@ -37,9 +36,9 @@ def main():
     # Get and validate all command-line arguments from user
     cli_args = get_cli_args(
         "Script to get the average matrices of two subject sets",
-        ["example_file", "group_1_avg_file", "group_2_avg_file", 
-         "inverse_fisher_z", "matrices_conc_1", "matrices_conc_2", "output",
-         "calculate"],
+        ("example_file", GP_AV_FILE.format(1), GP_AV_FILE.format(2), 
+         "inverse_fisher_z", GP_MTR_FILE.format(1), GP_MTR_FILE.format(2), 
+         "output", "calculate"),
         PWD, validate_cli_args
     )
     
@@ -48,11 +47,12 @@ def main():
     # files' columns: One for matrix file path and one for subject ID
     paths_col = "scalar"
     for group_num in ("1", "2"):      
-        print("Making average matrix for group {}".format(group_num))
+        print("Making {} matrix for group {}"
+              .format(cli_args.calculate, group_num))
         save_avg_matrix(get_average_matrix(get_total_matrix_from_conc(
             cli_args, group_num, paths_col, "id_redcap"
         ), paths_col, cli_args), cli_args, group_num)
-
+            
     # Print when this script started and finished
     print(starting_timestamp)
     get_and_print_timestamp_when(sys.argv[0], "finished")
@@ -125,11 +125,12 @@ def save_avg_matrix(avg_matrix, cli_args, gp_num):
     :param gp_num: String that is just the group number of the matrix to save
     :return: N/A
     """
-    cli_args = add_default_avg_matr_path_to(cli_args, gp_num,
-                                            argparse.ArgumentParser(),
-                                            DEFAULT_DEM_VAR_PCONNS)
-    avg_matr = getattr(cli_args, "group_{}_avg_file".format(gp_num))
-    print("Saving group {} average matrix to {}".format(gp_num, avg_matr))
+    cli_args = add_and_validate_gp_file(cli_args, gp_num,
+                                        argparse.ArgumentParser(),
+                                        MATRIX_COL, "example_file")
+    avg_matr = getattr(cli_args, GP_AV_FILE.format(gp_num))
+    print("Saving group {} {} matrix to {}"
+          .format(gp_num, cli_args.calculate, avg_matr))
     save_to_cifti2(avg_matrix, cli_args.example_file, avg_matr)
 
 
