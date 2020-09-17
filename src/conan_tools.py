@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-09-14
+Updated 2020-09-17
 """
 
 ##################################
@@ -479,6 +479,46 @@ def get_pwd():
     return pwd
 
 
+def get_shaded_area_bounds(all_data_df, to_fill):
+    """
+    :param all_data_df: pandas.DataFrame with two columns of numeric values, 
+                        labeled "Subjects" and "Correlation"
+    :param to_fill: String that is either "all" to shade the area between the
+                    min and max correlations for each number of subjects in
+                    all_data_df or "confidence_interval" to shade the area 
+                    within a 95% confidence interval of the correlations for
+                    each number of subjects in all_data_df
+    :return: Tuple of 2 pandas.Series objects where the first is the lower
+             boundary of the shaded area and the second is the upper boundary
+    """
+    # Local function to aggregate correlation values
+    def aggregate_data(quantile):
+        """
+        :param quantile: Integer representing the quantile of data to aggregate
+        :return: pandas.Series with all aggregated correlation values
+        """
+        return all_data_df.groupby(["Subjects"]).agg(
+            lambda x: x.quantile(quantile)
+        )["Correlation"]
+
+    # Calculate bounds of shaded area depending on which area to_fill
+    if to_fill == "all":
+        result = (aggregate_data(0), aggregate_data(1))
+    elif to_fill == "confidence_interval":
+        intervals = all_data_df.groupby(["Subjects"]).agg(
+            lambda x: get_confidence_interval(x)
+        )
+        intervals = pd.DataFrame(intervals["Correlation"].tolist(),
+                                 index=intervals.index)
+        result = (intervals[0], intervals[1])
+    elif to_fill == "stdev":
+        invls = all_data_df.groupby(["Subjects"]).agg(lambda x: x.std())
+        result = pd.DataFrame(invls["Correlation"].tolist(), index=invls.index)
+    else:
+        raise ValueError("Invalid value for --fill parameter.")                        
+    return result
+
+
 def get_subset_of(group, subset_size):
     """
     Randomly select, validate, and return a subset of a given size from group
@@ -730,12 +770,12 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             "-f",
             "--fill",
             choices=choices_fill,
-            default=choices_fill[1],
+            # default=choices_fill[1],
             help=("Choose which data to shade in the visualization. Choose {} "
                   "to shade in the area within the minimum and maximum "
                   "correlations in the dataset. Choose {} to only shade in the "
-                  "95 percent confidence interval of the data. By default, "
-                  "--fill will be {}.".format(*choices_fill, choices_fill[1]))
+                  "95 percent confidence interval of the data."
+                  .format(*choices_fill)) # "By default, --fill will be {}.".format(, choices_fill[1]))
         )
 
     def correls_csv():
@@ -1239,6 +1279,19 @@ def rename_exacloud_path(path):
     return (path.replace(PATH_RUSH, PATH_EXA)
             if "exa" in socket.gethostname() else 
             path.replace(PATH_EXA, PATH_RUSH))
+
+
+def rgba(name, opacity=1, nxt_clr=0):
+    """
+    :param name: String naming the color to return the RGBA code for
+    :param opacity: Float from 0 to 1 defining the transparency percentage
+    :return: String with the RGBA code for that color with that transparency
+    Colors as RGBA strings, for the visualizations' lines and shading
+    """
+    return "rgba({},{},{},{})".format(*{
+        "black": [0,0,0], "red": [255,0,0], "white": [255,255,255],
+        "random": [random.randrange(255) for _ in range(3)]
+    }[name], opacity)
 
 
 def save_to_cifti2(matrix_data, example_file, outfile):
