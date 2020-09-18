@@ -263,8 +263,8 @@ def get_ASA_arg_names():
             "hide_legend", "marker_size", "n_analyses", "nan_threshold",
             "no_matching", "only_make_graphs", "output", "place_legend", 
             "parallel", "plot", "rounded_scatter", "skip_subset_generation",
-            "spearman_rho", "subset_size", "title_font_size", "y_range",
-            "inverse_fisher_z"]
+            "spearman_rho", "subset_size", "title_font_size", "trace_titles",
+            "y_range", "inverse_fisher_z"]
 
 
 def get_average_matrix(subset, paths_col, cli_args):
@@ -646,7 +646,6 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     choices_plot = ["scatter", "stdev", []]  # See stackoverflow.com/q/57739309
     default_continuous_vars = ['demo_prnt_ed_v2b', 'interview_age', 
                                'rel_group_id', 'rel_relationship']
-    default_dims = (1, 2)
     default_euclid_vals = [-0.44897407617376806, 3.7026679337563486]
     default_marker_size = 5
     default_n_analyses = 1
@@ -770,7 +769,6 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             "-f",
             "--fill",
             choices=choices_fill,
-            # default=choices_fill[1],
             help=("Choose which data to shade in the visualization. Choose {} "
                   "to shade in the area within the minimum and maximum "
                   "correlations in the dataset. Choose {} to only shade in the "
@@ -794,6 +792,19 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "the top of the output visualizations. Otherwise, each "
                   "visualization will have one of these default titles: {}"
                   .format(", ".join(default_vis_titles().values())))
+        )
+
+
+    def trace_titles(): # Optional: Name each --only-make-graphs dataset
+        parser.add_argument(
+            "-traces",
+            "--trace_titles",
+            nargs="+",
+            help=("Include this argument with a custom title for each dataset "
+                  "(one per file in --only-make-graphs). Only use this flag "
+                  "in --only-make-graphs mode. Include exactly as many titles "
+                  "as --only-make-graphs parameters, in exactly the same order "
+                  "as those parameters, to match titles to datasets correctly.")
         )
 
     # Optional: Path to average matrix .nii file for group 1

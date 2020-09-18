@@ -195,7 +195,7 @@ def only_make_graphs(cli_args):
     to_plot = []
     for i in range(len(cli_args.only_make_graphs)):
         correls_csv = cli_args.only_make_graphs[i]
-        plot_ttl = os.path.splitext(os.path.basename(correls_csv))[0]
+        plot_ttl = cli_args.trace_titles[i]
         corr_df = pd.read_csv(correls_csv)
         corr_df = corr_df.loc[corr_df["Subjects"].isin(cli_args.subset_size)]
         to_plot += get_traces_to_plot(corr_df, cli_args, plot_ttl, i)
@@ -511,7 +511,8 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
              matrix from .pconn files of all its subjects
     """
     avg_matrices = dict()  # Return value: Average matrices of both groups
-
+    subsets_dict.pop("subset_size") 
+    
     # Get all data from .pconn files of every subject in the subset
     for sub_num, subset in subsets_dict.items():
         col = get_matr_file_col_name(cli_args) 
