@@ -6,6 +6,7 @@ These are a collection of scripts which supplement `automated_subset_analysis.py
 - `make_average_matrix.py` takes groups of matrices and makes one average matrix for each group. Those average matrices can then be used for the `--group-1-avg-file` and `--group-2-avg-file` arguments of `automated_subset_analysis.py`. It can also make variance matrices with the `--calculate variance` argument.
 - `make_average_and_subsets.py` runs `make_average_matrix.py` to get average matrices, and then immediately afterwards runs `automated_subset_analysis.py` using those average matrices.
 - `asa_submitter.py` runs many instances of `automated_subset_analysis.py` in parallel to speed up its data processing.
+- `pairwise_correlator.py` compares 2 groups of `.nii` files, where both groups have the exact same subjects, and outputs the within-subject correlations broken down by each demographic variable in a bar plot and in a box plot.
 - `conan_tools.py` does nothing, but it contains all of the functionality used by multiple scripts in this repository.
 
 ## Purpose
@@ -68,44 +69,48 @@ Most of the command-line arguments used by the scripts in this directory are the
 
 ### Chart: Which Scripts Accept Which Arguments
 
-| Argument Name | automated... | euclidean... | make...matrix | make...subsets | asa... |
-|----------------------------|:-:|:-:|:-:|:-:|:-:|
-| `group_1_demo_file`        | **Required** | **Required** | | **Required** | **Required** |
-| `group_2_demo_file`        | **Required** | **Required** | | **Required** | **Required** |
+        "nan_threshold", "only_make_graphs", "output", "spearman_rho",
+
+
+| Argument Name | automated... | euclidean... | make...matrix | make...subsets | asa... | pairwise...
+|----------------------------|:-:|:-:|:-:|:-:|:-:|:-:|
+| `group_1_demo_file`        | **Required** | **Required** | | **Required** | **Required** | **Required** |
+| `group_2_demo_file`        | **Required** | **Required** | | **Required** | **Required** | |
 | `--columns`                | Optional | Optional | | Optional | Optional |
 | `--n-analyses`             | Optional | Optional | | Optional | Optional |
-| `--nan-threshold`          | Optional | Optional | | Optional | Optional |
+| `--nan-threshold`          | Optional | Optional | | Optional | Optional | Optional |
 | `--no-matching`            | Optional | Optional | | Optional | Optional |
 | `--subset-size`            | Optional | Optional | | Optional | Optional |
-| `--continuous-variables`   | | Optional | | | |
+| `--continuous-variables`   | | Optional | | | | |
 | `--example-file`           | | | Optional | Optional | |
 | `--inverse-fisher-z`       | Optional | | Optional | Optional | Optional
-| `--matrices-conc-1`        | Optional | | **Required** | **Required** | Optional |
-| `--matrices-conc-2`        | Optional | | **Required** | **Required** | Optional |
+| `--matrices-conc-1`        | Optional | | **Required** | **Required** | Optional | **Required** |
+| `--matrices-conc-2`        | Optional | | **Required** | **Required** | Optional | **Required** |
 | `--calculate`              | Optional | | Optional | Optional | Optional |
 | `--group-1-avg-file`       | Optional | | Optional | Optional | Optional |
 | `--group-2-avg-file`       | Optional | | Optional | Optional | Optional |
 | `--group-1-var-file`       | Optional | | Optional | Optional | Optional |
 | `--group-2-var-file`       | Optional | | Optional | Optional | Optional |
-| `--output`                 | Optional | | Optional | Optional | Optional |
-| `--axis-font-size`         | Optional | | | Optional | |
-| `--euclidean`              | Optional | | | Optional | |
-| `--fill`                   | Optional | | | Optional | |
-| `--graph-title`            | Optional | | | Optional | |
-| `--hide-legend`            | Optional | | | Optional | |
-| `--marker-size`            | Optional | | | Optional | |
-| `--plot`                   | Optional | | | Optional | |
-| `--title-font-size`        | Optional | | | Optional | |
-| `--y-range`                | Optional | | | Optional | |
+| `--output`                 | Optional | | Optional | Optional | Optional | Optional |
+| `--spearman-rho`           | Optional | | | Optional | Optional | Optional |
+| `--axis-font-size`         | Optional | | | Optional | | Optional |
+| `--euclidean`              | Optional | | | Optional | | |
+| `--fill`                   | Optional | | | Optional | | |
+| `--graph-title`            | Optional | | | Optional | | Optional |
+| `--hide-legend`            | Optional | | | Optional | | Optional |
+| `--marker-size`            | Optional | | | Optional | | Optional |
+| `--plot`                   | Optional | | | Optional | | |
+| `--rounded-scatter`        | Optional | | | Optional | | |
+| `--title-font-size`        | Optional | | | Optional | | Optional |
+| `--trace-titles`           | Optional | | | Optional | | |
+| `--y-range`                | Optional | | | Optional | | Optional |
 | `--parallel`               | Optional<sup>1</sup> | | | | |
-| `--only-make-graphs`       | Optional | | | | Optional |
-| `--skip-subset-generation` | Optional | | | | Optional |
+| `--only-make-graphs`       | Optional | | | | Optional | Optional | Optional |
+| `--skip-subset-generation` | Optional | | | | Optional | 
 | `--job-time-limit`         | | | | | Optional |
 | `--print-command`          | | | | | Optional |
 | `--queue-max-size`         | | | | | Optional |
 | `--seconds-between-jobs`   | | | | | Optional |
-
-
 
 <sup> 1 </sup>The `--parallel` flag probably never needs to be added by the user. `asa_submitter.py` will add it automatically when running `automated_subset_analysis.py` batch jobs, and that is the flag's only intended use.
 
@@ -151,6 +156,16 @@ Two `.conc` files, one for each group, are given with lists of paths to matrix f
 
 Normally, `automated_subset_analysis.py` accepts already-existing average matrices of both groups as its `--group-1-avg-file` and `--group-2-avg-file` arguments. However, `make_average_and_subsets.py` runs `make_average_matrix.py` to create new ones and then passes them to `automated_subset_analysis.py`.
 
+- ### `pairwise_correlator.py` explanation
+
+`pairwise_correlator.py` accepts 2 `.conc` files in its `--matrices-conc-*` arguments. Other scripts use those arguments for comparing `.nii` files from 2 lists of totally different subjects. However, `pairwise_correlator.py` accepts 2 `.conc` files which have lists of different `.nii` files for the *same* subjects. Each line in each `.conc` file must have a path to a `.nii` file for the same subject as that same line in the other `.conc` file. 
+
+For the same reason, `pairwise_correlator.py` only uses the `group_1_demo_file` argument and not `group_2_demo_file`. Because each subject only belongs to one group, and both `.conc` files include exactly the same subjects, this script can only be run on one group at a time. Ff the subjects are from group 2, the user should pass the path to group 2's demographics `.csv` file as the `group_1_demo_file` parameter.
+
+The script can be run in one of two stages: correlating the matrices pairwise and then making visualizations. For each subject, the first stage finds the correlation between its matrix in `--matrices-conc-1` and its matrix in `--matrices-conc-2`. That correlation is saved out to a `.csv` file with all of the others. By default, that file will be called `correlations_out_{CURRENT-DATE-AND-TIME}.csv`.
+
+Stage two makes visualizations of the correlation values and saves them into `.html` files. Each demographic variable to analyze gets two visualizations: a box-and-whisker plot showing how the correlations differ between demographic groups, and a bar plot showing how the correlations differ between each demographic value's median, low outliers, and high outliers. Each box-and-whisker plot is saved as `{demographic variable}_by_demo.html`. Each bar plot is saved as `{demographic variable}_by_outlier.html`. 
+
 - ### `asa_submitter.py` explanation
 
 This script was designed for parallel processing using the [SLURM job scheduling cluster](https://slurm.schedmd.com/overview.html) on the OHSU Exacloud server. `asa_submitter.py` runs many (specifically, `--n-analyses` * the number of parameters in `--subset-size`) batch jobs of `automated_subset_analysis.py` at once. Each job will save its output subsets into a subdirectory of the `--output` directory. The number of subdirectories created will be equl to `--n-analyses`, numbered from 1 to `--n-analyses` like so:
@@ -167,4 +182,4 @@ Each job will append its output correlations to 3 `.csv` files in the `--output`
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-12-16
-- Updated by Greg Conan, 2020-06-05
+- Updated by Greg Conan, 2020-09-18

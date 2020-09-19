@@ -1,6 +1,8 @@
 # Automated Subset Analysis
 
-This script was written for the ABCD resource paper. It uses Python's `argparse` package so that it can be run from the BASH command line and accept command-line arguments.
+These automated split-half subset reliability analysis scripts were written for the ABCD resource paper. They use Python's `argparse` package so that it can be run from the BASH command line and accept command-line arguments.
+
+*The rest of this README focuses on `automated_subset_analysis.py`. If you are looking for a description of `asa_submitter.py`, then see `src/README.md`.*
 
 ## Purpose
 
@@ -77,19 +79,29 @@ python3 automated_subset_analysis.py ${demo1} ${demo2}
 
     - If this flag is included, it must include paths to readable `.csv` files with 2 columns: `Subjects` (the number of subjects in each subset) and `Correlation` (the correlation between each randomly generated subset in that pair).
 
+    - Giving this flag multiple `.csv` files will put all of their correlations onto one visualization.
+
 1. `--skip-subset-generation` takes either no parameters or one path to a readable directory as a parameter. Include this flag to calculate correlations and create the visualization using existing subsets instead of randomly generating new ones. By default, the subsets to use for calculating the correlations between average matrices and producing a visualization will be assumed to exist in the `--output` folder. To load subsets from a different folder, add the path to this flag as a parameter.
 
-#### Notes for Step-Skipping Flags
+##### Notes for Step-Skipping Flags
 
 - If `--skip-subset-generation` or `--only-make-graphs` is included, then `--subset-size` and `--n-analyses` will do nothing.
 - If `--only-make-graphs` is included, then `--skip-subset-generation` will do nothing.
-- Unless the `--only-make-graphs` flag is used, the `.csv` file(s) with subsets' average correlations will/must be called `correlations_sub1_sub2.csv`, `correlations_sub1_all2.csv`, and/or `correlations_sub2_all1.csv`.
+- Unless the `--only-make-graphs` flag is used, the `.csv` file(s) with subsets' average correlations will/must be called `correlations_sub1_sub2.csv`, `correlations_sub1_all2.csv`, and `correlations_sub2_all1.csv`.
 
-#### Visualization Formatting Arguments (8)
+#### Optional Visualization Elements (4)
+
+1. `--fill` takes one parameter, a string that is either `all` or `confidence-interval`. Include this flag to choose which data to shade in the visualization. Choose `all` to shade in the area within the minimum and maximum correlations in the dataset. Choose `confidence-interval` to only shade in the 95% confidence interval of the data. By default, neither will be shaded. This argument cannot be used if `--only-make-graphs` has multiple parameters.
+
+1. `--hide-legend` takes no parameters. Unless this flag is included, the output visualization(s) will display a legend in the top- or bottom-right corner showing the name of each thing plotted on the graph: data points, average trendline, confidence interval, and/or entire data range.
+
+1. `--plot` takes one or more strings: `scatter` and/or `stdev`. By default, a visualization will be made with only the average. Include this flag with the parameter `scatter` to also plot all data points as a scatter plot, and/or with the parameter `stdev` to also plot standard deviation bars for each sample size.
+
+1. `--rounded-scatter` takes no parameters. Include this flag to reduce the total number of data points plotted on any scatter-plot visualization by only including points at rounded intervals. This flag does nothing unless `--plot` includes `scatter`. 
+
+#### Visualization Formatting Arguments (6)
 
 1. `--axis-font-size` takes one positive integer, the font size of the text on both axes of the visualizations that this script will create. If this argument is excluded, then by default, the font size will be `30`.
-
-1. `--fill` takes one parameter, a string that is either `all` or `confidence-interval`. Include this flag to choose which data to shade in the visualization. Choose `all` to shade in the area within the minimum and maximum correlations in the dataset. Choose `confidence-interval` to only shade in the 95% confidence interval of the data. By default, this argument will be `confidence-interval`.
 
 1. `--graph-title` takes one string, the title at the top of all output visualizations and the name of the output `.html` visualization files. To break the title into two lines, include `<br>` in the `--graph-title` string. Unless this flag is included, each visualization will have one of these default titles:
     - "Correlations Between Average Subsets"
@@ -97,13 +109,11 @@ python3 automated_subset_analysis.py ${demo1} ${demo2}
     - "Group 1 to Group 2 Subset Correlation"
     - "Correlation Between Unknown Groups"
 
-1. `--hide-legend` takes no parameters. Unless this flag is included, the output visualization(s) will display a legend in the top- or bottom-right corner showing the name of each thing plotted on the graph: data points, average trendline, confidence interval, and/or entire data range.
-
 1. `--marker-size` takes one positive integer to determine the size (in pixels) of each data point in the output visualization. The default size is 5.
 
-1. `--plot` By default, a visualization will be made with only the average and confidence interval. Include this flag with the parameter `scatter` to also plot all data points as a scatter plot, and/or with the parameter `stdev` to also plot standard deviation bars for each sample size.
-
 1. `--title-font-size` takes one positive integer. It is just like `--axis-font-size`, except for the title text in the visualizations. This flag determines the size of the title text above the graph as well as both axis labels. If this argument is excluded, then by default, the font size will be `40`.
+
+1. `--trace-titles` takes one or more strings. Each will label one dataset in the output visualization. Each should be the title of one of the `.csv` files given to `--only-make-graphs`. Include exactly as many titles as there are `--only-make-graphs` parameters, in exactly the same order as those parameters, to match titles to datasets correctly. This argument only does anything when running the script in `--only-make-graphs` mode. 
 
 1. `--y-range` takes two floating-point numbers, the minimum and maximum values to be displayed on the y-axis of the graph visualizations that this script will create. By default, this script will automatically set the y-axis boundaries to show all of the correlation values and nothing else.
 
@@ -123,9 +133,9 @@ python3 automated_subset_analysis.py ${demo1} ${demo2}
 
     - By default, `automated_subset_analysis.py`  checks that every subset of one group has the same proportion of twins, triplets, or other siblings as the other group. It also checks that no one in the subset has family members outside the subset. `--no-matching` will skip both checks. 
 
-    - Use this flag if `--subset-size` includes any number under 25, because family relationship matching takes a very long time for small subsets.
+    - Use this flag if `--subset-size` includes any number under 25, because family relationship matching takes a *very* long time for small subsets.
 
-1. `--parallel` takes one valid path, the directory containing `automated_subset_analysis.py`. It should be included to simultaneously run multiple different instances of `automated_subset_analysis.py` as a batch command executed by `asa_submitter.py`. Otherwise, this flag is not needed.
+1. `--parallel` takes one valid path, the directory containing `automated_subset_analysis.py`. It will automatically be included by `asa_submitter.py` to simultaneously run multiple different instances of `automated_subset_analysis.py` as a batch command. Otherwise, this flag is not needed. Do not use this flag, because it will be included automatically if needed.
 
 For more information, including the shorthand flags for each option, run this script with the `--help` command: `python3 automated_subset_analysis.py --help`
 
@@ -165,15 +175,15 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 
 <sup>2</sup> The output visualization will include:
 
-1. A trendline using the average correlation values of each subset size,
-1. A shaded region showing a certain data range (confidence interval or all data),
-1. Each correlation value as 1 data point (if `--plot` includes `scatter`),
+1. One trendline using the average correlation values of each subset size (or more if `--only-make-graphs` includes multiple parameters),
+1. A shaded region showing a data range, either the confidence interval or all data (if `--fill` is used),
+1. Each correlation value as 1 data point (if `--plot` includes `scatter`; if `--rounded-scatter` is used, only correlation values at specific intervals will be plotted),
 1. Standard deviation bars above and below each data point (if `--plot` includes `stdev`), and
-1. A legend to identify all of these parts (unless `--hide-visualization` is used).
+1. A legend to identify all of these parts (unless `--hide-legend` is used).
 
 ## Metadata
 
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Updated by Greg Conan, 2020-06-05
+- Updated by Greg Conan, 2020-09-18
