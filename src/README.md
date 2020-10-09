@@ -69,9 +69,6 @@ Most of the command-line arguments used by the scripts in this directory are the
 
 ### Chart: Which Scripts Accept Which Arguments
 
-        "nan_threshold", "only_make_graphs", "output", "spearman_rho",
-
-
 | Argument Name | automated... | euclidean... | make...matrix | make...subsets | asa... | pairwise...
 |----------------------------|:-:|:-:|:-:|:-:|:-:|:-:|
 | `group_1_demo_file`        | **Required** | **Required** | | **Required** | **Required** | **Required** |

@@ -47,7 +47,7 @@ demo2=/home/user/conan/data/group2_pconn.csv
 python3 automated_subset_analysis.py ${demo1} ${demo2}
 ```
 
-### Optional Arguments (21)
+### Optional Arguments (27)
 
 #### File Paths with Default Values (7)
 
