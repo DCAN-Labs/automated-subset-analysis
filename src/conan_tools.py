@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-09-17
+Updated 2020-10-12
 """
 
 ##################################
@@ -39,6 +39,9 @@ MATRIX_COL = "pconn10min"
 # Constants: Base of paths on specific servers
 PATH_EXA = "home/exacloud/lustre1/fnl_lab"
 PATH_RUSH = "mnt/rose/shared"
+
+
+# All Functions (sorted alphabetically)
 
 
 def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
@@ -522,7 +525,7 @@ def get_shaded_area_bounds(all_data_df, to_fill):
 def get_subset_of(group, subset_size):
     """
     Randomly select, validate, and return a subset of a given size from group
-    :param group: pandas.DataFrame++ which is an entire group of subjects
+    :param group: pandas.DataFrame which is an entire group of subjects
     :param subset_size: Integer which is the amount of subjects to randomly 
                         select from group to put into a subset
     :return: pandas.DataFrame which is a valid subset of group
@@ -798,7 +801,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def trace_titles(): # Optional: Name each --only-make-graphs dataset
         parser.add_argument(
             "-traces",
-            "--trace_titles",
+            "--trace-titles",
             nargs="+",
             help=("Include this argument with a custom title for each dataset "
                   "(one per file in --only-make-graphs). Only use this flag "

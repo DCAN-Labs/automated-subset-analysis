@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-09-17
+Updated 2020-10-14
 """
 
 ##################################
@@ -98,11 +98,14 @@ def validate_cli_args(cli_args, parser):
                 and len(cli_args.y_range) != 2):
             parser.error("--y-range must be only two numbers.")
             
-        # If user said to only make graphs, validate that the path they gave is
-        # a file with correlations instead of a path to a directory
-        if cli_args.only_make_graphs:
+        if cli_args.only_make_graphs:  # Check that each trace has a title
+            if not cli_args.trace_titles:
+                cli_args.trace_titles = ["correlations"] 
+            if len(cli_args.trace_titles) != len(cli_args.only_make_graphs):
+                parser.error("--trace-titles must have exactly as many input "
+                             "arguments as --only-make-graphs.") 
             for correl_file in cli_args.only_make_graphs:
-                if os.path.isdir(correl_file):
+                if os.path.isdir(correl_file):  # Check correlation file path
                     parser.error(correl_file + " is a directory, not a file. "
                                  "Please enter the name of a readable file as "
                                  "the --only-make-graphs argument.")
@@ -283,8 +286,6 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
     """
     # List of subsets to return, and progress tracker to estimate time left
     all_subsets = []
-
-    # Keep track of how long this function takes, to show the user during loop
     progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
 
     # Get average correlation from user-defined number of pairs of average
@@ -304,7 +305,7 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
                 subsets[group_n] = randomly_select_subset(
                     getattr(cli_args, GP_DEMO_STR.format(group_n)),
                     group_n, sub_n, getattr(
-                        cli_args, GP_DEMO_STR.format(1 if group_n == 2 else 2)
+                        cli_args, GP_DEMO_STR.format(other_group_n(group_n))
                     ), cli_args, check_keep_looping,
                     natural_log(sub_n, cli_args.euclidean)
                 )
@@ -470,11 +471,9 @@ def get_correl_dataframes(all_subsets, cli_args):
         sub1_all2: Correls between group 1 subset avg matrix and group 2 total
         sub2_all1: Correls between group 2 subset avg matrix and group 1 total}
     """
-    # Return value: Dict of correlation lists to become pandas.DataFrames
+    # Dict of correlation lists to return as DataFrames, and progress tracker
     correl_lists = {subset_id: [] for subset_id in
                     default_vis_titles().keys() if subset_id}
-
-    # Keep track of how long this function takes, to show the user during loop
     progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
 
     # Get each pair of average matrices, their correlation with each other, and
