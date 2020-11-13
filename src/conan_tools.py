@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-10-12
+Updated 2020-11-12
 """
 
 ##################################
@@ -23,6 +23,7 @@ import numpy as np
 import os
 import pandas as pd
 import random
+import re
 from scipy import stats
 from scipy.spatial import distance
 import socket
@@ -263,11 +264,11 @@ def get_ASA_arg_names():
             "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
-            "hide_legend", "marker_size", "n_analyses", "nan_threshold",
-            "no_matching", "only_make_graphs", "output", "place_legend", 
-            "parallel", "plot", "rounded_scatter", "skip_subset_generation",
-            "spearman_rho", "subset_size", "title_font_size", "trace_titles",
-            "y_range", "inverse_fisher_z"]
+            "hide_legend", "inverse_fisher_z", "marker_size", "n_analyses",
+            "nan_threshold", "no_matching", "only_make_graphs", "output",
+            "place_legend",  "parallel", "plot", "rounded_scatter",
+            "skip_subset_generation", "spearman_rho", "subset_size",
+            "title_font_size", "trace_titles", "plot_with_matlab", "y_range"]
 
 
 def get_average_matrix(subset, paths_col, cli_args):
@@ -987,6 +988,15 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "standard deviation bars.".format(choices_plot[0],
                                                     choices_plot[1]))
         )
+
+    def use_matlab_to_plot():  # Optional: Make plot using Feczko's MATLAB code
+        parser.add_argument(
+            "-matlab",
+            "--plot-with-matlab",
+            action="store_true",
+            help=("Include this flag to make the visualization using compiled"
+                  "MATLAB code instead of using Python's plotly package.")
+        )
    
 
     def rounded_scatter():  # Optional: Fewer points in scatter plot
@@ -1049,6 +1059,17 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "(Pearson's r).")
         )
 
+    def plot_with_matlab():  # Optional: Make plot using Feczko's MATLAB code
+        parser.add_argument(
+            "-matlab",
+            "--plot-with-matlab",
+            type=lambda x: valid_readable_file(x) and os.path.isdir(x),
+            help=("Valid path to the MATLAB Runtime Environment directory. "
+                  "Only include this flag if you want to make the "
+                  "visualization using compiled MATLAB code instead of using "
+                  "Python's plotly package.")
+        )
+
     def y_range():  # Optional: Custom data range for visualization
         parser.add_argument(
             "-y",
@@ -1066,6 +1087,32 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     for cli_arg in to_add:
         locals()[cli_arg]()
     return parser
+
+
+def is_subset_csv(path, subset_filename_parts, n_analyses):
+    """
+    Check if a path is to a subset .csv file made by this script
+    :param path: String which should be a valid path to a readable file
+    :param subsets_filename_parts: List of strings which each have part of the
+                                   format of subset file names
+    :param n_analyses: Integer which is the --n-analyses argument value
+    :return: True if path is to a readable .csv file following this script's 
+             subset file naming conventions, where the analysis number <= 
+             n_analyses, with two columns labeled '1' and '2'; otherwise False 
+    """
+    try:
+        path = valid_readable_file(path)
+        assert os.path.splitext(path)[1] == ".csv"
+        with open(path, "r") as infile:
+            row_1 = infile.readline().strip().split(",")
+        name = os.path.basename(path)
+        match = re.search(r"(\d+)", name)
+        result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
+                  and all(part in name for part in subset_filename_parts)
+                  and match and (int(match.group()) <= n_analyses))
+    except (OSError, argparse.ArgumentTypeError, AssertionError):
+        result = False
+    return result
 
 
 def load_matrix_from(matrix_path):

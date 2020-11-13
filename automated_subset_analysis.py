@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-10-14
+Updated 2020-11-12
 """
 
 ##################################
@@ -22,7 +22,7 @@ import os
 import pandas as pd
 import plotly
 import pprint
-import re
+import subprocess
 import sys
 
 # Ensure that this script can find its local imports if parallel processing
@@ -36,11 +36,13 @@ if "--parallel" in sys.argv:
 from src.conan_tools import *
 
 # Constants: Default demographic variable names, and PWD
+DEFAULT_CORR_FILE = "correlations_{}.csv"
 DEFAULT_DEM_VAR_MATR = "matrix_file"
 DEFAULT_DEM_VAR_PCONNS = "pconn10min"
 DEFAULT_DEM_VAR_SUBJID = "id_redcap"
 GP_DEMO_STR = "group_{}_demo"
 PWD = get_pwd()
+MATLAB_PLOTTER = os.path.join(PWD, "src", "run_MultiShadedBars.sh")
 
 
 def main():
@@ -245,32 +247,6 @@ def skip_subset_generation(cli_args, subsets_file_name):
         raise FileNotFoundError("No subsets found at {}"
                                 .format(cli_args.skip_subset_generation))
     return all_subsets
-
-
-def is_subset_csv(path, subset_filename_parts, n_analyses):
-    """
-    Check if a path is to a subset .csv file made by this script
-    :param path: String which should be a valid path to a readable file
-    :param subsets_filename_parts: List of strings which each have part of the
-                                   format of subset file names
-    :param n_analyses: Integer which is the --n-analyses argument value
-    :return: True if path is to a readable .csv file following this script's 
-             subset file naming conventions, where the analysis number <= 
-             n_analyses, with two columns labeled '1' and '2'; otherwise False
-    """
-    try:
-        path = valid_readable_file(path)
-        assert os.path.splitext(path)[1] == ".csv"
-        with open(path, "r") as infile:
-            row_1 = infile.readline().strip().split(",")
-        name = os.path.basename(path)
-        match = re.search(r"(\d+)", name)
-        result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
-                  and all(part in name for part in subset_filename_parts)
-                  and match and (int(match.group()) <= n_analyses))
-    except (OSError, argparse.ArgumentTypeError, AssertionError):
-        result = False
-    return result
 
 
 def save_and_get_all_subsets(cli_args, subsets_file_name):
@@ -497,7 +473,7 @@ def get_correl_dataframes(all_subsets, cli_args):
         progress = update_progress(progress, "making average matrices",
                                    subset_size, start_time)
     return {name: save_correlations_and_get_df(
-                cli_args, correls, "correlations_{}.csv".format(name)
+                cli_args, correls, DEFAULT_CORR_FILE.format(name)
             ) for name, correls in correl_lists.items()}
 
 
@@ -679,11 +655,17 @@ def make_visualization(traces, correls_df, cli_args, corr_df_name):
     :param corr_df_name: String identifying the visualization to create
     """
     vis_title, vis_file = get_vis_title_and_fname(cli_args, corr_df_name)
-    layout = get_plot_layout(get_layout_args(cli_args, correls_df, vis_title))
-    with HiddenPrints():
-        plotly.offline.init_notebook_mode()
-        plotly.offline.plot({"data": traces, "layout": layout},
-                            image="png", filename=vis_file)
+    if cli_args.plot_with_matlab:
+        correls_file = os.path.join(cli_args.output,
+                                    DEFAULT_CORR_FILE.format(corr_df_name))
+        subprocess.check_call(cli_args.plot_with_matlab, MATLAB_PLOTTER,
+                              correls_file, "Outfile", vis_file)  # TODO Add MultiShadedBars' other input parameters, and account for MultiShadedBars taking a specific kind of file (see ~/conan.../shaded.../example_plotfiles/*.csv)
+    else:
+        layout = get_plot_layout(get_layout_args(cli_args, correls_df, vis_title))
+        with HiddenPrints():
+            plotly.offline.init_notebook_mode()
+            plotly.offline.plot({"data": traces, "layout": layout},
+                                image="png", filename=vis_file)
 
 
 def get_vis_title_and_fname(cli_args, corr_df_name):
@@ -694,15 +676,15 @@ def get_vis_title_and_fname(cli_args, corr_df_name):
     """
     vis_title = (cli_args.graph_title if cli_args.graph_title
                  else default_vis_titles()[corr_df_name])
-    vis_file = graph_title_to_filename(vis_title) + ".html"
+    vis_file = graph_title_to_vis_fname(vis_title) + ".html"
     i = 1
     while os.access(vis_file, os.R_OK):
         i += 1
-        vis_file = "{}_{}.html".format(graph_title_to_filename(vis_title), i)
+        vis_file = "{}_{}.html".format(graph_title_to_vis_fname(vis_title), i)
     return vis_title, vis_file
 
 
-def graph_title_to_filename(title):
+def graph_title_to_vis_fname(title):
     """
     :param title: String naming the title of the visualization
     :return: title, but converted into a valid filename
