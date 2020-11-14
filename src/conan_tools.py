@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-11-12
+Updated 2020-11-13
 """
 
 ##################################
@@ -264,9 +264,9 @@ def get_ASA_arg_names():
             "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
-            "hide_legend", "inverse_fisher_z", "marker_size", "n_analyses",
-            "nan_threshold", "no_matching", "only_make_graphs", "output",
-            "place_legend",  "parallel", "plot", "rounded_scatter",
+            "hide_legend", "inverse_fisher_z", "marker_size", "matlab_rgba",
+            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs",
+            "output", "place_legend",  "parallel", "plot", "rounded_scatter",
             "skip_subset_generation", "spearman_rho", "subset_size",
             "title_font_size", "trace_titles", "plot_with_matlab", "y_range"]
 
@@ -873,6 +873,21 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "marker size is {}.".format(default_marker_size))
         )
 
+    def matlab_rgba():  # Optional: Set colors of MATLAB graphing code
+        parser.add_argument(
+            "--matlab-rgba",
+            "-rgba",
+            type=valid_float_0_to_1,
+            default=[1, 0, 0],  # Default color: red
+            nargs="+",  # Actually nargs is in [3,4,5] -- see validate_cli_args
+            help=("RGBA values and line threshold for producing visualization "
+                  "using MATLAB. Include 3 to 5 numbers between 0 and 1: the "
+                  "red value, green value, blue value, (optional) alpha "
+                  "opacity value, and (optional) threshold to include a line "
+                  "at on the visualization. This argument does nothing unless "
+                  "the --plot-with-matlab flag is included.")
+        )
+
     # Optional: .conc file with paths to group 1 matrix files
     def matrices_conc_1():
         parser.add_argument(
@@ -956,7 +971,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def parallel():  # Optional: Parallel processing boolean flag
         parser.add_argument(
             "--parallel",
-            type=valid_readable_file,
+            type=valid_readable_dir,
             help=("Include this argument if you are running the "
                   "automated_subset_analysis script many times in parallel. "
                   "It should be a valid path to the directory containing the "
@@ -989,13 +1004,16 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                                                     choices_plot[1]))
         )
 
-    def use_matlab_to_plot():  # Optional: Make plot using Feczko's MATLAB code
+
+    def plot_with_matlab():  # Optional: Make plot using Feczko's MATLAB code
         parser.add_argument(
             "-matlab",
             "--plot-with-matlab",
-            action="store_true",
-            help=("Include this flag to make the visualization using compiled"
-                  "MATLAB code instead of using Python's plotly package.")
+            type=valid_readable_dir,
+            help=("Valid path to the MATLAB v9.4 Runtime Environment folder. "
+                  "Only include this flag if you want to make the "
+                  "visualization using compiled MATLAB code instead of using "
+                  "Python's plotly package.")
         )
    
 
@@ -1057,17 +1075,6 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=("Include this flag to correlate matrices using the "
                   "Spearman's rho correlation value instead of the default "
                   "(Pearson's r).")
-        )
-
-    def plot_with_matlab():  # Optional: Make plot using Feczko's MATLAB code
-        parser.add_argument(
-            "-matlab",
-            "--plot-with-matlab",
-            type=lambda x: valid_readable_file(x) and os.path.isdir(x),
-            help=("Valid path to the MATLAB Runtime Environment directory. "
-                  "Only include this flag if you want to make the "
-                  "visualization using compiled MATLAB code instead of using "
-                  "Python's plotly package.")
         )
 
     def y_range():  # Optional: Custom data range for visualization
@@ -1342,6 +1349,18 @@ def rename_exacloud_path(path):
             path.replace(PATH_EXA, PATH_RUSH))
 
 
+def rgba0to1(name, opacity=0.3, threshold=None):
+    """
+    :param name: String naming the color to return the RGB 0-to-1 code for
+
+    :return: List with 3 RGB values from 0 to 1 (red, blue, and green), an
+             alpha (opacity) value, and an optional threshold line value
+    """
+    rgb = {"red": [1, 0, 0], "blue": [0, 0, 1], "green": [0, 1, 0], 
+           "yellow": [1, 1, 0], "white": [1, 1, 1], "black": [0, 0, 0]}[name]
+    return rgb + [opacity] if threshold is None else rgb + [opacity, threshold]
+
+
 def rgba(name, opacity=1, nxt_clr=0):
     """
     :param name: String naming the color to return the RGBA code for
@@ -1515,6 +1534,15 @@ def valid_readable_file(path):
                     os.path.abspath, "Cannot read file at {}")
 
 
+def valid_readable_dir(path):
+    """
+    :param path: Parameter to check if it represents a valid directory path
+    :return: String representing a valid directory path
+    """
+    return validate(path, os.path.isdir, valid_readable_file,
+                    "{} is not a valid directory path")
+
+
 def valid_whole_number(to_validate):
     """
     Throw argparse exception unless to_validate is an integer greater than 0
@@ -1522,7 +1550,7 @@ def valid_whole_number(to_validate):
     :return: to_validate if it is an integer greater than 0
     """
     return validate(to_validate, lambda x: int(to_validate) > 0, int, 
-                    "{} is not a positive integer.")
+                    "{} is not a positive integer")
 
 
 def validate(path, is_real, make_valid, err_msg, prepare=None):

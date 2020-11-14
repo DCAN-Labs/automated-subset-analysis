@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-11-12
+Updated 2020-11-13
 """
 
 ##################################
@@ -35,11 +35,13 @@ if "--parallel" in sys.argv:
 # Local custom imports
 from src.conan_tools import *
 
-# Constants: Default demographic variable names, and PWD
-DEFAULT_CORR_FILE = "correlations_{}.csv"
+# Constants: Default demographic variable names, PWD, and MATLAB plot code info
+DEFAULT_CF = "correlations_{}.csv"
 DEFAULT_DEM_VAR_MATR = "matrix_file"
 DEFAULT_DEM_VAR_PCONNS = "pconn10min"
 DEFAULT_DEM_VAR_SUBJID = "id_redcap"
+DEFAULT_MAT_CSV = "matlab_parameters_{}.csv"
+DEFAULT_OPACITY = 0.3
 GP_DEMO_STR = "group_{}_demo"
 PWD = get_pwd()
 MATLAB_PLOTTER = os.path.join(PWD, "src", "run_MultiShadedBars.sh")
@@ -99,7 +101,14 @@ def validate_cli_args(cli_args, parser):
         if (cli_args.y_range and isinstance(cli_args.y_range[0], float)
                 and len(cli_args.y_range) != 2):
             parser.error("--y-range must be only two numbers.")
-            
+        
+        # Validate RGBA & threshold values for MATLAB plotting code
+        if getattr(cli_args, "matlab_rgba", None):
+            if not (3 <= len(cli_args.matlab_rgba) <= 5):
+                parser.error("--matlab-rgba must only have 3-5 parameters.")
+            elif len(cli_args.matlab_rgba) == 3:
+                cli_args.matlab_rgba += [DEFAULT_OPACITY]
+
         if cli_args.only_make_graphs:  # Check that each trace has a title
             if not cli_args.trace_titles:
                 cli_args.trace_titles = ["correlations"] 
@@ -123,9 +132,10 @@ def validate_cli_args(cli_args, parser):
             # For each group, get the path to the directory with its .pconn
             # files, and the path to the file containing its demographic data
             cli_args = add_pconn_paths_to(cli_args, [1, 2], parser)
-        return cli_args
+
     except (OSError, argparse.ArgumentTypeError) as e:
         parser.error(str(e))
+    return cli_args
 
 
 def add_pconn_paths_to(cli_args, group_nums, parser):
@@ -164,7 +174,6 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
                     .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
             if not getattr(cli_args, gp_var_f, None):
                 setattr(cli_args, gp_var_f, os.path.join(cli_args.output, fname))
-            
     return cli_args
 
 
@@ -191,7 +200,7 @@ def only_make_graphs(cli_args):
     """
     If user said to, skip subset generation and skip correlation calculation,
     then make visualizations from already-existing correlation files
-    :param cli_args: argparse namespace with --output and --only_make_graphs 
+    :param cli_args: argparse namespace with --output and --only-make-graphs 
                      command-line arguments to pass to make_visualization.
     :return: N/A
     """
@@ -646,8 +655,7 @@ def get_confidence_interval_traces(cli_args, avgs, correls_df):
 
 def make_visualization(traces, correls_df, cli_args, corr_df_name):
     """
-    Show image & export it as a .png file, but suppress the massive block of
-    text that plotly.offline.plot() would normally print to the command line
+    Show image & export it as a .png file 
     :param traces: List of plotly.graph_objs.Scatter objects to plot
     :param correls_df: pandas.DataFrame with one column titled "Subjects" and
                        another titled "Correlations"; both have numeric values
@@ -655,14 +663,24 @@ def make_visualization(traces, correls_df, cli_args, corr_df_name):
     :param corr_df_name: String identifying the visualization to create
     """
     vis_title, vis_file = get_vis_title_and_fname(cli_args, corr_df_name)
-    if cli_args.plot_with_matlab:
-        correls_file = os.path.join(cli_args.output,
-                                    DEFAULT_CORR_FILE.format(corr_df_name))
-        subprocess.check_call(cli_args.plot_with_matlab, MATLAB_PLOTTER,
-                              correls_file, "Outfile", vis_file)  # TODO Add MultiShadedBars' other input parameters, and account for MultiShadedBars taking a specific kind of file (see ~/conan.../shaded.../example_plotfiles/*.csv)
-    else:
+    if cli_args.plot_with_matlab:  # Make visualization w/ compiled MATLAB code
+        corrfile_dir = (os.path.dirname(cli_args.only_make_graphs[0]) if
+                        cli_args.only_make_graphs else cli_args.output)
+        corrfile = os.path.join(corrfile_dir, DEFAULT_CF.format(corr_df_name))
+        nowID = ''.join(c for c in str(now()) if c.isalnum())
+        paramcsv = os.path.join(cli_args.output, DEFAULT_MAT_CSV.format(nowID))
+        with open(paramcsv, "w+") as outf:  # Write parameter file for MATLAB code
+            outf.write(",".join([corrfile,
+                                *[str(x) for x in cli_args.matlab_rgba]]) + "\n")
+        os.chmod(paramcsv, 775)
+        print(os.path.join(cli_args.output, vis_file.split(".")[0] + ".tif"))
+        subprocess.check_call((
+            MATLAB_PLOTTER, cli_args.plot_with_matlab, paramcsv, "Outputfile",
+            os.path.join(cli_args.output, vis_file.split(".")[0] + ".tif")
+        ))  # TODO Add MultiShadedBars' other input parameters
+    else:  # Make visualization w/ python plotly package
         layout = get_plot_layout(get_layout_args(cli_args, correls_df, vis_title))
-        with HiddenPrints():
+        with HiddenPrints():  # suppress plotly.offline.plot()'s huge textwall 
             plotly.offline.init_notebook_mode()
             plotly.offline.plot({"data": traces, "layout": layout},
                                 image="png", filename=vis_file)
