@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-11-13
+Updated 2020-11-16
 """
 
 ##################################
@@ -13,8 +13,6 @@ Updated 2020-11-13
 # automated_subset_analysis folder/module
 #
 ##################################
-
-# Imports
 import argparse
 import datetime
 import math
@@ -264,7 +262,9 @@ def get_ASA_arg_names():
             "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
-            "hide_legend", "inverse_fisher_z", "marker_size", "matlab_rgba",
+            "hide_legend", "inverse_fisher_z", "marker_size",
+            "matlab_lower_bound", "matlab_no_edge", "matlab_rgba",
+            "matlab_show_thresh", "matlab_upper_bound", 
             "n_analyses", "nan_threshold", "no_matching", "only_make_graphs",
             "output", "place_legend",  "parallel", "plot", "rounded_scatter",
             "skip_subset_generation", "spearman_rho", "subset_size",
@@ -673,6 +673,9 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                                                        "10min_mean")
     help_group_var_file = help_group_avg_or_var.format("{0}", "variance",
                                                        "variance_matrix")
+    help_matlab = ("Only include this argument if you want to make the "
+                  "visualization using compiled MATLAB code instead of using "
+                  "Python's plotly package.")
     help_matrices_conc = (
         "Path to a .conc file containing only a list of valid paths to group "
         "{0} matrix files. This flag is only needed if your group {0} "
@@ -873,6 +876,45 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "marker size is {}.".format(default_marker_size))
         )
 
+    def matlab_lower_bound():
+        parser.add_argument(
+            "-mat-lo",
+            "--matlab-lower-bound",
+            type=valid_float_0_to_1,
+            help=("Lower bound of data to display on output visualization. {} "
+                  "This argument must be a decimal number between 0 and 1."
+                  .format(help_matlab))
+        )
+
+    def matlab_no_edge():
+        parser.add_argument(
+            "-mat-no",
+            "--matlab-no-edge",
+            action="store_true",
+            help=("Include this flag to not display an edge in the output "
+                  "visualization. {}".format(help_matlab))
+        )
+
+    def matlab_show_thresh():
+        parser.add_argument(
+            "-mat-show",
+            "--matlab-show-threshold",
+            dest="matlab_show",
+            action="store_true",
+            help=("Include this flag to display the threshold as a line on "
+                  "the output visualization. {}".format(help_matlab))
+        )
+
+    def matlab_upper_bound():
+        parser.add_argument(
+            "-mat-up",
+            "--matlab-upper-bound",
+            type=valid_float_0_to_1,
+            help=("Upper bound of data to display on output visualization. {} "
+                  "This argument must be a decimal number between 0 and 1."
+                  .format(help_matlab))
+        )
+
     def matlab_rgba():  # Optional: Set colors of MATLAB graphing code
         parser.add_argument(
             "--matlab-rgba",
@@ -884,8 +926,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "using MATLAB. Include 3 to 5 numbers between 0 and 1: the "
                   "red value, green value, blue value, (optional) alpha "
                   "opacity value, and (optional) threshold to include a line "
-                  "at on the visualization. This argument does nothing unless "
-                  "the --plot-with-matlab flag is included.")
+                  "at on the visualization. {}".format(help_matlab))
         )
 
     # Optional: .conc file with paths to group 1 matrix files
@@ -1011,9 +1052,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             "--plot-with-matlab",
             type=valid_readable_dir,
             help=("Valid path to the MATLAB v9.4 Runtime Environment folder. "
-                  "Only include this flag if you want to make the "
-                  "visualization using compiled MATLAB code instead of using "
-                  "Python's plotly package.")
+                  + help_matlab)
         )
    
 
@@ -1240,7 +1279,7 @@ def natural_log(x_val, coefs):
     return coefs[0] * np.log(x_val) + coefs[1]
 
 
-def now():
+def now():  # I use this to get the datetime method when I import conan_tools
     """
     :return: Current date and time as a datetime.datetime object
     """
@@ -1442,6 +1481,19 @@ def time_since(start_time):
     return now() - start_time
 
 
+def touch_dict(a_dict, key_to_check, new_value):
+    """
+    :param a_dict: Dictionary to verify that it has a specific key
+    :param key_to_check: Object which will become a key in a_dict
+    :param new_value: Object which will become the value of 
+                      a_dict[key_to_check] if there isn't one already
+    :return: a_dict, but with key_to_check as a key matched to a list
+    """
+    if key_to_check not in a_dict:
+        a_dict[key_to_check] = new_value
+    return a_dict
+
+
 def track_progress(n_analyses, subset_sizes):
     """
     :param n_analyses: Integer, how many times to analyze each subset size
@@ -1494,7 +1546,7 @@ def valid_float_0_to_1(val):
     :param val: Object to check, then throw an error if it is invalid
     :return: val if it is a float between 0 and 1 (otherwise invalid)
     """
-    return validate(val, lambda x: 0 < float(x) < 1, float,
+    return validate(val, lambda x: 0 <= float(x) <= 1, float,
                     "Value must be a number between 0 and 1.")
 
 

@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-11-13
+Updated 2020-11-16
 """
 
 ##################################
@@ -14,8 +14,6 @@ Updated 2020-11-13
 # those correlations for each subset size
 #
 ##################################
-
-# Standard Python imports
 import argparse
 import numpy as np
 import os
@@ -65,7 +63,6 @@ def main():
     if cli_args.only_make_graphs:
         only_make_graphs(cli_args)
     else:
-
         # Make and save all subsets and their correlations, unless said to
         # get pre-existing subsets' correlations instead
         get_subs = (skip_subset_generation
@@ -85,8 +82,7 @@ def main():
                 plot_args = (corr_df, cli_args, corr_df_name)
                 make_visualization(get_traces_to_plot(*plot_args), *plot_args)
 
-    # Print the date and time when this script started and finished running
-    print(starting_timestamp)
+    print(starting_timestamp)  # Print when script started and finished running
     get_and_print_timestamp_when(sys.argv[0], "finished")
 
 
@@ -167,13 +163,13 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
 
         # Validate group variance matrix file paths
         if cli_args.calculate in ("variance", "effect-size"):
-            gp_var_f = GP_VAR_FILE.format(gp_num)
+            gp_v_f = GP_VAR_FILE.format(gp_num)
             cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
-                                                DEFAULT_DEM_VAR_PCONNS, gp_var_f)
+                                                DEFAULT_DEM_VAR_PCONNS, gp_v_f)
             fname = ("group_{}_variance_matrix{}"
-                    .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
-            if not getattr(cli_args, gp_var_f, None):
-                setattr(cli_args, gp_var_f, os.path.join(cli_args.output, fname))
+                     .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
+            if not getattr(cli_args, gp_v_f, None):
+                setattr(cli_args, gp_v_f, os.path.join(cli_args.output, fname))
     return cli_args
 
 
@@ -383,8 +379,7 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
 
             # Make subset-to-group effect sizes matrix
             gp_ids = "sub{}_all{}".format(gp_num, other_gp)
-            if gp_ids not in effect_sizes:
-                effect_sizes[gp_ids] = []
+            effect_sizes = touch_dict(effect_sizes, gp_ids, [])
             effect_sizes[gp_ids] = make_effect_size_matrix(
                 subset_data[gp_num][VAR], pd.DataFrame(gp_vars[other_gp]),
                 subset_size, gp_sizes[other_gp], subset_data[gp_num][AVG],
@@ -393,8 +388,7 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
 
         # Make subset-to-subset effect sizes matrix
         gp_ids = "sub1_sub2"
-        if gp_ids not in effect_sizes:
-            effect_sizes[gp_ids] = []
+        effect_sizes = touch_dict(effect_sizes, gp_ids, [])
         effect_sizes[gp_ids] = make_effect_size_matrix(
             subset_data[1][VAR], subset_data[2][VAR], subset_size, subset_size,
             subset_data[1][AVG], subset_data[2][AVG], effect_sizes[gp_ids]
@@ -502,8 +496,6 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
         col = get_matr_file_col_name(cli_args) 
         print("Making average matrix for group {} subset.".format(sub_num))
         avg_matrices[sub_num] = get_average_matrix(subset, col, cli_args)
-        print("Group {} subset's average matrix: \n{}"
-              .format(sub_num, avg_matrices[sub_num]))
     return avg_matrices
 
 
@@ -653,33 +645,41 @@ def get_confidence_interval_traces(cli_args, avgs, correls_df):
                                  line_color=rgba("red", 0), showlegend=False)]
 
 
-def make_visualization(traces, correls_df, cli_args, corr_df_name):
+def make_visualization(traces, corr_df, cli_args, corr_df_name):
     """
     Show image & export it as a .png file 
     :param traces: List of plotly.graph_objs.Scatter objects to plot
-    :param correls_df: pandas.DataFrame with one column titled "Subjects" and
+    :param corr_df: pandas.DataFrame with one column titled "Subjects" and
                        another titled "Correlations"; both have numeric values
     :param cli_args: argparse namespace with all command-line arguments
     :param corr_df_name: String identifying the visualization to create
     """
-    vis_title, vis_file = get_vis_title_and_fname(cli_args, corr_df_name)
+    vis_ttl, vis_file = get_vis_title_and_fname(cli_args, corr_df_name)
     if cli_args.plot_with_matlab:  # Make visualization w/ compiled MATLAB code
         corrfile_dir = (os.path.dirname(cli_args.only_make_graphs[0]) if
                         cli_args.only_make_graphs else cli_args.output)
         corrfile = os.path.join(corrfile_dir, DEFAULT_CF.format(corr_df_name))
         nowID = ''.join(c for c in str(now()) if c.isalnum())
         paramcsv = os.path.join(cli_args.output, DEFAULT_MAT_CSV.format(nowID))
-        with open(paramcsv, "w+") as outf:  # Write parameter file for MATLAB code
+        with open(paramcsv, "w+") as outf:  # Write param file for MATLAB code
             outf.write(",".join([corrfile,
-                                *[str(x) for x in cli_args.matlab_rgba]]) + "\n")
+                                *[str(x) for x in cli_args.matlab_rgba]])+"\n")
         os.chmod(paramcsv, 775)
-        print(os.path.join(cli_args.output, vis_file.split(".")[0] + ".tif"))
+        mat_params = []
+        pm_IDs = {"LowerBound": getattr(cli_args, "matlab_lower_bound", None),
+                  "NoEdge": getattr(cli_args, "matlab_no_edge", None),
+                  "ShowThreshold": getattr(cli_args, "matlab_show", None),
+                  "UpperBound": getattr(cli_args, "matlab_upper_bound", None)} 
+        for pm_name, pm_val in pm_IDs.items():
+            if pm_val:
+                mat_params += [pm_name, str(pm_val)]
         subprocess.check_call((
-            MATLAB_PLOTTER, cli_args.plot_with_matlab, paramcsv, "Outputfile",
-            os.path.join(cli_args.output, vis_file.split(".")[0] + ".tif")
-        ))  # TODO Add MultiShadedBars' other input parameters
+            MATLAB_PLOTTER, cli_args.plot_with_matlab, paramcsv, *mat_params,
+            "Outputfile",
+            os.path.join(cli_args.output,  vis_file.split(".")[0] + ".tif"),
+        )) 
     else:  # Make visualization w/ python plotly package
-        layout = get_plot_layout(get_layout_args(cli_args, correls_df, vis_title))
+        layout = get_plot_layout(get_layout_args(cli_args, corr_df, vis_ttl))
         with HiddenPrints():  # suppress plotly.offline.plot()'s huge textwall 
             plotly.offline.init_notebook_mode()
             plotly.offline.plot({"data": traces, "layout": layout},
