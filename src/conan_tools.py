@@ -1279,7 +1279,7 @@ def natural_log(x_val, coefs):
     return coefs[0] * np.log(x_val) + coefs[1]
 
 
-def now():  # I use this to get the datetime method when I import conan_tools
+def now():  # I use this to get the datetime method by importing conan_tools
     """
     :return: Current date and time as a datetime.datetime object
     """
@@ -1391,7 +1391,8 @@ def rename_exacloud_path(path):
 def rgba0to1(name, opacity=0.3, threshold=None):
     """
     :param name: String naming the color to return the RGB 0-to-1 code for
-
+    :param opacity: Float between 0 (100% transparent) and 1 (100% opaque)
+    :param threshold: Float
     :return: List with 3 RGB values from 0 to 1 (red, blue, and green), an
              alpha (opacity) value, and an optional threshold line value
     """
@@ -1569,8 +1570,8 @@ def valid_output_dir(path):
     :param path: String which is a valid (not necessarily real) folder path
     :return: String which is a validated absolute path to real writeable folder
     """
-    return validate(path, lambda x: os.path.isdir(x) and os.access(x, os.W_OK),
-                    valid_readable_file, "Cannot create directory at {}", 
+    return validate(path, lambda x: os.access(x, os.W_OK),
+                    valid_readable_dir, "Cannot create directory at {}", 
                     lambda y: os.makedirs(y, exist_ok=True))
 
 
