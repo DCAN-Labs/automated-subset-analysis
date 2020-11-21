@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-10-12
+Updated 2020-11-16
 """
 
 ##################################
@@ -13,8 +13,6 @@ Updated 2020-10-12
 # automated_subset_analysis folder/module
 #
 ##################################
-
-# Imports
 import argparse
 import datetime
 import math
@@ -23,6 +21,7 @@ import numpy as np
 import os
 import pandas as pd
 import random
+import re
 from scipy import stats
 from scipy.spatial import distance
 import socket
@@ -263,11 +262,13 @@ def get_ASA_arg_names():
             "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
-            "hide_legend", "marker_size", "n_analyses", "nan_threshold",
-            "no_matching", "only_make_graphs", "output", "place_legend", 
-            "parallel", "plot", "rounded_scatter", "skip_subset_generation",
-            "spearman_rho", "subset_size", "title_font_size", "trace_titles",
-            "y_range", "inverse_fisher_z"]
+            "hide_legend", "inverse_fisher_z", "marker_size",
+            "matlab_lower_bound", "matlab_no_edge", "matlab_rgba",
+            "matlab_show_thresh", "matlab_upper_bound", 
+            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs",
+            "output", "place_legend",  "parallel", "plot", "rounded_scatter",
+            "skip_subset_generation", "spearman_rho", "subset_size",
+            "title_font_size", "trace_titles", "plot_with_matlab", "y_range"]
 
 
 def get_average_matrix(subset, paths_col, cli_args):
@@ -672,6 +673,9 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                                                        "10min_mean")
     help_group_var_file = help_group_avg_or_var.format("{0}", "variance",
                                                        "variance_matrix")
+    help_matlab = ("Only include this argument if you want to make the "
+                  "visualization using compiled MATLAB code instead of using "
+                  "Python's plotly package.")
     help_matrices_conc = (
         "Path to a .conc file containing only a list of valid paths to group "
         "{0} matrix files. This flag is only needed if your group {0} "
@@ -872,6 +876,59 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "marker size is {}.".format(default_marker_size))
         )
 
+    def matlab_lower_bound():
+        parser.add_argument(
+            "-mat-lo",
+            "--matlab-lower-bound",
+            type=valid_float_0_to_1,
+            help=("Lower bound of data to display on output visualization. {} "
+                  "This argument must be a decimal number between 0 and 1."
+                  .format(help_matlab))
+        )
+
+    def matlab_no_edge():
+        parser.add_argument(
+            "-mat-no",
+            "--matlab-no-edge",
+            action="store_true",
+            help=("Include this flag to not display an edge in the output "
+                  "visualization. {}".format(help_matlab))
+        )
+
+    def matlab_show_thresh():
+        parser.add_argument(
+            "-mat-show",
+            "--matlab-show-threshold",
+            dest="matlab_show",
+            action="store_true",
+            help=("Include this flag to display the threshold as a line on "
+                  "the output visualization. {}".format(help_matlab))
+        )
+
+    def matlab_upper_bound():
+        parser.add_argument(
+            "-mat-up",
+            "--matlab-upper-bound",
+            type=valid_float_0_to_1,
+            help=("Upper bound of data to display on output visualization. {} "
+                  "This argument must be a decimal number between 0 and 1."
+                  .format(help_matlab))
+        )
+
+    def matlab_rgba():  # Optional: Set colors of MATLAB graphing code
+        parser.add_argument(
+            "--matlab-rgba",
+            "-rgba",
+            type=valid_float_0_to_1,
+            default=[1, 0, 0],  # Default color: red
+            nargs="+",  # Actually nargs is in [3,4,5] -- see validate_cli_args
+            help=("RGBA values and line threshold for producing visualization "
+                  "using MATLAB. Include 3 to 5 numbers between 0 and 1: the "
+                  "red value, green value, blue value, (optional) alpha "
+                  "opacity value, and (optional) threshold to include a line "
+                  "at on the visualization. {}".format(help_matlab))
+        )
+
     # Optional: .conc file with paths to group 1 matrix files
     def matrices_conc_1():
         parser.add_argument(
@@ -955,7 +1012,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def parallel():  # Optional: Parallel processing boolean flag
         parser.add_argument(
             "--parallel",
-            type=valid_readable_file,
+            type=valid_readable_dir,
             help=("Include this argument if you are running the "
                   "automated_subset_analysis script many times in parallel. "
                   "It should be a valid path to the directory containing the "
@@ -986,6 +1043,16 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "all data points as a scatter plot, and/or {} to also plot "
                   "standard deviation bars.".format(choices_plot[0],
                                                     choices_plot[1]))
+        )
+
+
+    def plot_with_matlab():  # Optional: Make plot using Feczko's MATLAB code
+        parser.add_argument(
+            "-matlab",
+            "--plot-with-matlab",
+            type=valid_readable_dir,
+            help=("Valid path to the MATLAB v9.4 Runtime Environment folder. "
+                  + help_matlab)
         )
    
 
@@ -1066,6 +1133,32 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     for cli_arg in to_add:
         locals()[cli_arg]()
     return parser
+
+
+def is_subset_csv(path, subset_filename_parts, n_analyses):
+    """
+    Check if a path is to a subset .csv file made by this script
+    :param path: String which should be a valid path to a readable file
+    :param subsets_filename_parts: List of strings which each have part of the
+                                   format of subset file names
+    :param n_analyses: Integer which is the --n-analyses argument value
+    :return: True if path is to a readable .csv file following this script's 
+             subset file naming conventions, where the analysis number <= 
+             n_analyses, with two columns labeled '1' and '2'; otherwise False 
+    """
+    try:
+        path = valid_readable_file(path)
+        assert os.path.splitext(path)[1] == ".csv"
+        with open(path, "r") as infile:
+            row_1 = infile.readline().strip().split(",")
+        name = os.path.basename(path)
+        match = re.search(r"(\d+)", name)
+        result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
+                  and all(part in name for part in subset_filename_parts)
+                  and match and (int(match.group()) <= n_analyses))
+    except (OSError, argparse.ArgumentTypeError, AssertionError):
+        result = False
+    return result
 
 
 def load_matrix_from(matrix_path):
@@ -1186,7 +1279,7 @@ def natural_log(x_val, coefs):
     return coefs[0] * np.log(x_val) + coefs[1]
 
 
-def now():
+def now():  # I use this to get the datetime method by importing conan_tools
     """
     :return: Current date and time as a datetime.datetime object
     """
@@ -1295,6 +1388,19 @@ def rename_exacloud_path(path):
             path.replace(PATH_EXA, PATH_RUSH))
 
 
+def rgba0to1(name, opacity=0.3, threshold=None):
+    """
+    :param name: String naming the color to return the RGB 0-to-1 code for
+    :param opacity: Float between 0 (100% transparent) and 1 (100% opaque)
+    :param threshold: Float
+    :return: List with 3 RGB values from 0 to 1 (red, blue, and green), an
+             alpha (opacity) value, and an optional threshold line value
+    """
+    rgb = {"red": [1, 0, 0], "blue": [0, 0, 1], "green": [0, 1, 0], 
+           "yellow": [1, 1, 0], "white": [1, 1, 1], "black": [0, 0, 0]}[name]
+    return rgb + [opacity] if threshold is None else rgb + [opacity, threshold]
+
+
 def rgba(name, opacity=1, nxt_clr=0):
     """
     :param name: String naming the color to return the RGBA code for
@@ -1376,6 +1482,19 @@ def time_since(start_time):
     return now() - start_time
 
 
+def touch_dict(a_dict, key_to_check, new_value):
+    """
+    :param a_dict: Dictionary to verify that it has a specific key
+    :param key_to_check: Object which will become a key in a_dict
+    :param new_value: Object which will become the value of 
+                      a_dict[key_to_check] if there isn't one already
+    :return: a_dict, but with key_to_check as a key matched to a list
+    """
+    if key_to_check not in a_dict:
+        a_dict[key_to_check] = new_value
+    return a_dict
+
+
 def track_progress(n_analyses, subset_sizes):
     """
     :param n_analyses: Integer, how many times to analyze each subset size
@@ -1428,7 +1547,7 @@ def valid_float_0_to_1(val):
     :param val: Object to check, then throw an error if it is invalid
     :return: val if it is a float between 0 and 1 (otherwise invalid)
     """
-    return validate(val, lambda x: 0 < float(x) < 1, float,
+    return validate(val, lambda x: 0 <= float(x) <= 1, float,
                     "Value must be a number between 0 and 1.")
 
 
@@ -1451,8 +1570,8 @@ def valid_output_dir(path):
     :param path: String which is a valid (not necessarily real) folder path
     :return: String which is a validated absolute path to real writeable folder
     """
-    return validate(path, lambda x: os.path.isdir(x) and os.access(x, os.W_OK),
-                    valid_readable_file, "Cannot create directory at {}", 
+    return validate(path, lambda x: os.access(x, os.W_OK),
+                    valid_readable_dir, "Cannot create directory at {}", 
                     lambda y: os.makedirs(y, exist_ok=True))
 
 
@@ -1468,6 +1587,15 @@ def valid_readable_file(path):
                     os.path.abspath, "Cannot read file at {}")
 
 
+def valid_readable_dir(path):
+    """
+    :param path: Parameter to check if it represents a valid directory path
+    :return: String representing a valid directory path
+    """
+    return validate(path, os.path.isdir, valid_readable_file,
+                    "{} is not a valid directory path")
+
+
 def valid_whole_number(to_validate):
     """
     Throw argparse exception unless to_validate is an integer greater than 0
@@ -1475,7 +1603,7 @@ def valid_whole_number(to_validate):
     :return: to_validate if it is an integer greater than 0
     """
     return validate(to_validate, lambda x: int(to_validate) > 0, int, 
-                    "{} is not a positive integer.")
+                    "{} is not a positive integer")
 
 
 def validate(path, is_real, make_valid, err_msg, prepare=None):
