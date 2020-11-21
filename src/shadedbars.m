@@ -21,6 +21,9 @@ if N==1
     y = y'; % flip y to row vector if input is column vector 
 end
 
+% Assign arbitrary value to output var to prevent error
+figure_handle = [];
+
 % Cheking the x data
 if isempty(x)
     error('need a vector of x values of length y')
@@ -47,10 +50,23 @@ end
 
 %% Plot it 
 if exist('hobj','var')
+    if isempty(hobj)
+        figure_handle = figure;
+    end
 else
     figure_handle = figure;
 end
 hold on 
+
+% Added by Greg 2020-11-20
+if exist('figure_handle', 'var')
+    if isempty('figure_handle')
+        figure_handle = figure;
+    end
+else
+    figure_handle = figure;
+end
+
 
 edgeColor=colors+(1-colors)*0.5; % edge color 
 patchSaturation=0.15; %How de-saturated or transparent to make the patch

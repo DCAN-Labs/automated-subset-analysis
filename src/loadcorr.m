@@ -6,9 +6,9 @@ if isempty(varargin) == 0
         if ischar(varargin{iter})
             switch(varargin{iter})
                 case('LowerBound')
-                    shade_lowbound=varargin{iter+1};
+                    shade_lowbound=str2double(varargin{iter+1});
                 case('UpperBound')
-                    shade_upperbound=varargin{iter+1};
+                    shade_upperbound=str2double(varargin{iter+1});
             end
         end
     end
