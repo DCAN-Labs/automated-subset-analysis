@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-11-16
+Updated 2020-11-25
 """
 
 ##################################
@@ -476,7 +476,7 @@ def get_correl_dataframes(all_subsets, cli_args):
         progress = update_progress(progress, "making average matrices",
                                    subset_size, start_time)
     return {name: save_correlations_and_get_df(
-                cli_args, correls, DEFAULT_CORR_FILE.format(name)
+                cli_args, correls, DEFAULT_CF.format(name)
             ) for name, correls in correl_lists.items()}
 
 
