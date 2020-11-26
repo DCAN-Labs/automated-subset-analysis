@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-11-16
+Updated 2020-11-25
 """
 
 ##################################
@@ -783,14 +783,6 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   .format(*choices_fill)) # "By default, --fill will be {}.".format(, choices_fill[1]))
         )
 
-    def correls_csv():
-        parser.add_argument(
-            "-correls", "--correls-csv",
-            type=lambda x: os.path.splitext(x)[-1] == ".csv",
-            default=("Path to .csv file with correlation values between two "
-                     "connectivity matrices for each subject.")
-        )
-
     def graph_title():  # Optional: Title at top of visualization
         parser.add_argument(
             "-title",
@@ -799,19 +791,6 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "the top of the output visualizations. Otherwise, each "
                   "visualization will have one of these default titles: {}"
                   .format(", ".join(default_vis_titles().values())))
-        )
-
-
-    def trace_titles(): # Optional: Name each --only-make-graphs dataset
-        parser.add_argument(
-            "-traces",
-            "--trace-titles",
-            nargs="+",
-            help=("Include this argument with a custom title for each dataset "
-                  "(one per file in --only-make-graphs). Only use this flag "
-                  "in --only-make-graphs mode. Include exactly as many titles "
-                  "as --only-make-graphs parameters, in exactly the same order "
-                  "as those parameters, to match titles to datasets correctly.")
         )
 
     # Optional: Path to average matrix .nii file for group 1
@@ -898,7 +877,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     def matlab_show_thresh():
         parser.add_argument(
             "-mat-show",
-            "--matlab-show-threshold",
+            "--matlab-show-thresh",
             dest="matlab_show",
             action="store_true",
             help=("Include this flag to display the threshold as a line on "
@@ -1087,6 +1066,18 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=default_text_size_title,
             type=valid_whole_number,
             help=help_font_size.format("title", default_text_size_title)
+        )
+
+    def trace_titles(): # Optional: Name each --only-make-graphs dataset
+        parser.add_argument(
+            "-traces",
+            "--trace-titles",
+            nargs="+",
+            help=("Include this argument with a custom title for each dataset "
+                  "(one per file in --only-make-graphs). Only use this flag "
+                  "in --only-make-graphs mode. Include exactly as many titles "
+                  "as --only-make-graphs parameters, in exactly the same order "
+                  "as those parameters, to match titles to datasets correctly.")
         )
 
     # Optional: Make averages/correlations from existing subsets

@@ -12,32 +12,46 @@ Randomly selects and compares pairs of subsets of data from two groups. `automat
 
 1. `automated_subset_analysis.py` accepts demographic data for 2 datasets. For each dataset, it randomly selects many subsets which are not significantly different from the other dataset's total demographics.
 1. Once this script has made subsets of both groups, it finds correlations between the average of each subset and the other group. It also finds the correlation between the averages of both subsets. This process repeats a specified number of times for subsets which include specified numbers of subjects. After finding the correlations, the script saves them to `.csv` files.
-1. All of the correlation values are then plotted as data points on graph visualizations. Those graphs are saved when `automated_subset_analysis` finishes executing.
+1. The correlation values are then plotted as data points on graph visualizations. Those graphs are saved when `automated_subset_analysis` finishes executing.
 
 For a more detailed explanation, see this document's `Explanation of Process` section.
 
-## Dependencies
+## Installation
 
-1. [Python 3.5.2](https://www.python.org/downloads/release/python-352) or greater
+Installation should be simple:
+
+1. Clone this repository to a location on your local filesystem.
+1. Run `pip install -r requirements.txt` from within the new `automated_subset_analysis` directory.
+1. To verify that the code is set up, run `python3 automated_subset_analysis.py --help` within the same directory.
+
+## Requirements
+
+### Dependencies
+
+- The only dependency is [Python 3.5.2](https://www.python.org/downloads/release/python-352) or greater.
 
 ### Python Packages
 
-Required non-default packages:
+- All of the Python packages required by this script which are not default can be found in this directory's `requirements.txt` file.
 
-1. `nibabel`
-1. `numpy`
-1. `pandas`
-1. `plotly`
-1. `pprint`
-1. `scipy`
+### Limitations
+
+- This repository's Python code should theoretically be able to run on any operating system. However, so far it has only been tested on `*nix` systems. It may be unable to run on Windows or Mac. 
 
 ## Usage
 
 ### Required Arguments (2)
 
-1. `group_1_demo_file` is a path to a text file which contains only a list of paths (1 per line) to the `.nii` files of all subjects in the first group to analyze a subset of.
+1. `group_1_demo_file` is a path to a `.csv` file which contains demographic data about all subjects in group 1. By default, the script will assume that the group 1 input demographics `.csv` file has a column of numerical data under each of these names:
 
-1. `group_2_demo_file` is a path to a text file which contains only a list of paths (1 per line) to the `.nii` files of all subjects in the second group to analyze a subset of.
+    ```
+    demo_comb_income_v2b, demo_ed_v2, demo_prnt_ed_v2b, demo_sex_v2b, ehi_y_ss_scoreb interview_age, medhx_9a, race_ethnicity, rel_relationship, site_id_l
+    ```
+
+
+    The last column of the demographics `.csv` file should be a list of paths (1 per line) to the `.nii` files of all subjects in group 1.
+
+1. `group_2_demo_file` is a path to a `.csv` file just like `group_1_demo_file`, but containing demographic data about all subjects in group 2.
 
 Example of a basic call to this script:
 
@@ -47,7 +61,7 @@ demo2=/home/user/conan/data/group2_pconn.csv
 python3 automated_subset_analysis.py ${demo1} ${demo2}
 ```
 
-### Optional Arguments (27)
+### Optional Arguments (34)
 
 #### File Paths with Default Values (7)
 
@@ -89,17 +103,17 @@ python3 automated_subset_analysis.py ${demo1} ${demo2}
 - If `--only-make-graphs` is included, then `--skip-subset-generation` will do nothing.
 - Unless the `--only-make-graphs` flag is used, the `.csv` file(s) with subsets' average correlations will/must be called `correlations_sub1_sub2.csv`, `correlations_sub1_all2.csv`, and `correlations_sub2_all1.csv`.
 
-#### Optional Visualization Elements (4)
+#### Optional Plotly Visualization Elements (4)
 
 1. `--fill` takes one parameter, a string that is either `all` or `confidence-interval`. Include this flag to choose which data to shade in the visualization. Choose `all` to shade in the area within the minimum and maximum correlations in the dataset. Choose `confidence-interval` to only shade in the 95% confidence interval of the data. By default, neither will be shaded. This argument cannot be used if `--only-make-graphs` has multiple parameters.
 
 1. `--hide-legend` takes no parameters. Unless this flag is included, the output visualization(s) will display a legend in the top- or bottom-right corner showing the name of each thing plotted on the graph: data points, average trendline, confidence interval, and/or entire data range.
 
-1. `--plot` takes one or more strings: `scatter` and/or `stdev`. By default, a visualization will be made with only the average. Include this flag with the parameter `scatter` to also plot all data points as a scatter plot, and/or with the parameter `stdev` to also plot standard deviation bars for each sample size.
+1. `--plot` takes one or more strings: `scatter` and/or `stdev`. By default, a visualization will be made with only the average value for each subset size. Include this flag with the parameter `scatter` to also plot all data points as a scatter plot, and/or with the parameter `stdev` to also plot standard deviation bars for each subset size.
 
 1. `--rounded-scatter` takes no parameters. Include this flag to reduce the total number of data points plotted on any scatter-plot visualization by only including points at rounded intervals. This flag does nothing unless `--plot` includes `scatter`. 
 
-#### Visualization Formatting Arguments (6)
+#### Plotly Visualization Formatting Arguments (7)
 
 1. `--axis-font-size` takes one positive integer, the font size of the text on both axes of the visualizations that this script will create. If this argument is excluded, then by default, the font size will be `30`.
 
@@ -111,11 +125,29 @@ python3 automated_subset_analysis.py ${demo1} ${demo2}
 
 1. `--marker-size` takes one positive integer to determine the size (in pixels) of each data point in the output visualization. The default size is 5.
 
+1. `--place-legend` takes one number between 0 and 1, the location of the legend on the y-axis in the output visualization. 0 is the very bottom of the visualization and 1 is the very top. By default, this value will be 0.05.
+
 1. `--title-font-size` takes one positive integer. It is just like `--axis-font-size`, except for the title text in the visualizations. This flag determines the size of the title text above the graph as well as both axis labels. If this argument is excluded, then by default, the font size will be `40`.
 
 1. `--trace-titles` takes one or more strings. Each will label one dataset in the output visualization. Each should be the title of one of the `.csv` files given to `--only-make-graphs`. Include exactly as many titles as there are `--only-make-graphs` parameters, in exactly the same order as those parameters, to match titles to datasets correctly. This argument only does anything when running the script in `--only-make-graphs` mode. 
 
 1. `--y-range` takes two floating-point numbers, the minimum and maximum values to be displayed on the y-axis of the graph visualizations that this script will create. By default, this script will automatically set the y-axis boundaries to show all of the correlation values and nothing else.
+
+#### MATLAB Visualization Arguments (6)
+
+The following arguments only apply when making a visualization using the compiled MATLAB code instead of the Python Plotly code. So, they do nothing unless the `--plot-with-matlab` argument is included.
+
+1. `--plot-with-matlab` takes one string, a valid path to an existing directory for the MATLAB Runtime Environment v9.4. Include this flag to create the output visualization using compiled MATLAB "MultiShadedBars" code (see `src`). Otherwise, none of the `matlab` flags will do anything and the subset analysis code will produce an output visualization using `plotly`.
+
+1. `--matlab-lower-bound"` takes one decimal number between 0 and 1, the lower bound of data to display on the MATLAB output visualization.
+
+1. `--matlab-no-edge` takes no parameters. By default, the output visualization will display an edge. Include this flag to hide that edge.
+
+1. `--matlab-show-threshold` takes no parameters. Include this flag to display the threshold as a line on the output visualization. Otherwise, the line will not be shown.
+
+1. `--matlab-upper-bound` takes one decimal number between 0 and 1, the upper bound of data to display on the MATLAB output visualization.
+
+1. `--matlab-rgba` takes 3 to 5 3 to 5 numbers between 0 and 1, the RGBA values and line threshold for producing the visualization. Respectively those numbers are the red value, green value, blue value, (optional) alpha opacity value, and (optional) threshold to include a line at on the visualization.
 
 #### Other Flags (5)
 
@@ -173,7 +205,7 @@ python3 ./src/euclidean_threshold_estimator.py ./raw/ABCD_2.0_group1_data_10minp
 
 The data used to calculate that equation can be found in `./src/euclidean_threshold_estimate_data/est-eu-thresh-2019-12-12`.
 
-<sup>2</sup> The output visualization will include:
+<sup>2</sup> If `--plot-with-matlab` is not used, the output visualization will include:
 
 1. One trendline using the average correlation values of each subset size (or more if `--only-make-graphs` includes multiple parameters),
 1. A shaded region showing a data range, either the confidence interval or all data (if `--fill` is used),
@@ -186,4 +218,4 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Updated by Greg Conan, 2020-09-18
+- Updated by Greg Conan, 2020-11-25
