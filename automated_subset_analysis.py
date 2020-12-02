@@ -1,10 +1,10 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 """
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu
 Created 2019-09-17
-Updated 2020-11-25
+Updated 2020-12-01
 """
 
 ##################################
@@ -450,29 +450,29 @@ def get_correl_dataframes(all_subsets, cli_args):
         sub1_all2: Correls between group 1 subset avg matrix and group 2 total
         sub2_all1: Correls between group 2 subset avg matrix and group 1 total}
     """
-    # Dict of correlation lists to return as DataFrames, and progress tracker
+    # Make dict of correl lists to return as DataFrames, progress tracker, dict
+    # with each group's and subset's average matrix flattened, and random ROIs
     correl_lists = {subset_id: [] for subset_id in
                     default_vis_titles().keys() if subset_id}
     progress = track_progress(cli_args.n_analyses, cli_args.subset_size)
-
+    flat_sets = {"all1": cli_args.group_1_avg.flatten()}
+    rand_ROIs = randint_list(0, len(flat_sets["all1"]), cli_args.roi_subset)
+    flat_sets["all1"], flat_sets["all2"] = prepare_2_subsets(
+        flat_sets["all1"], cli_args.group_2_avg.flatten(), rand_ROIs, cli_args
+    )
     # Get each pair of average matrices, their correlation with each other, and
     # each one's correlation with the other group's average matrix
     for s in range(len(all_subsets)):
         start_time = now()
         sub_pair = all_subsets[s]
-        sub1_avg, sub2_avg = get_avg_matrices_of_subsets(sub_pair.copy(),
-                                                         cli_args).values()
-
-        # If data is 2-dimensional, flatten it to make it 1-dimensional
-        subsets = {"sub1": sub1_avg, "all1": cli_args.group_1_avg,
-                   "sub2": sub2_avg, "all2": cli_args.group_2_avg}
-        for set_name, set_avg in subsets.items():
-            subsets[set_name] = set_avg.flatten()
-
+        flat_sets["sub1"], flat_sets["sub2"] = prepare_2_subsets(
+            *get_avg_matrices_of_subsets(sub_pair.copy(), cli_args).values(),
+            rand_ROIs, cli_args
+        )
         # Get and show all subset correlations; put them in the dict to return
         subset_size = sub_pair.pop("subset_size")
-        correl_lists = get_sub_pair_correls(subset_size, correl_lists, subsets,
-                                            cli_args.spearman_rho)
+        correl_lists = get_sub_pair_correls(subset_size, correl_lists,
+                                            flat_sets, cli_args.spearman_rho)
         progress = update_progress(progress, "making average matrices",
                                    subset_size, start_time)
     return {name: save_correlations_and_get_df(

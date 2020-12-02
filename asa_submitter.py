@@ -4,7 +4,7 @@
 SBATCH job submitter for automated subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2020-01-03
-Updated 2020-02-12
+Updated 2020-11-25
 """
 
 ##################################
@@ -39,7 +39,7 @@ def main():
     )
 
     cli_args["sbatch"] = ["sbatch", "--time={}".format(cli_args["time"]), 
-                          "--mem=1gb", "-c", "1", "-A", "fnl_lab",
+                          "--mem=1gb", "-c", "1", "-A", cli_args["account"], 
                           os.path.join(PWD, "automated_subset_analysis.py")]
 
     try:
@@ -74,6 +74,7 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
     
     # This block differs from conan_tools.get_cli_args by adding a new 
     # argument and converting cli_args into a dictionary
+    default_acct = "feczk001"
     default_jobs = 100
     default_sleep = 60
     default_time_limit = "04:00:00"
@@ -91,6 +92,11 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
         default=default_jobs,
         help=("The maximum number of jobs to run simultaneously. By default, "
               "a maximum of {} jobs will run at once.".format(default_jobs))
+    )
+    parser.add_argument(
+        "-A", "--account",
+        default=default_acct,
+        help="Name of the account to submit the SBATCH job under."
     )
     parser.add_argument(
         "-sleep",
@@ -118,7 +124,7 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
 
 def get_asa_options(cli_args):
     """
-    :param cli_args: argparse namespace with all validated command-line
+    :param cli_args: Dictionary with all validated command-line
                      arguments, all of which are used by this function
     :return: List of some cli_args optional arguments and their values
     """
@@ -164,7 +170,7 @@ def count_jobs_running():
 def get_batch_command(cli_args, out_num, subset_size):
     """
     Get command to run automated_subset_analysis batch job
-    :param cli_args: argparse namespace with all validated command-line
+    :param cli_args: Dictionary with all validated command-line
                      arguments, all of which are used by this function
     :param out_num: Integer from 1 to cli_args["n_analyses"] representing which
                     analysis this batch command is
@@ -186,7 +192,7 @@ def get_batch_command(cli_args, out_num, subset_size):
 def submit_batch_jobs(cli_args):
     """
     Submit automated_subset_analysis batch jobs to run in parallel
-    :param cli_args: argparse namespace with all validated command-line
+    :param cli_args: Dictionary with all validated command-line
                      arguments, all of which are used by this function
     :return: N/A
     """   

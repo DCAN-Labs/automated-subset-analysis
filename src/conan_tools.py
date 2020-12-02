@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu
 Created 2019-11-26
-Updated 2020-11-25
+Updated 2020-12-01
 """
 
 ##################################
@@ -39,8 +39,7 @@ MATRIX_COL = "pconn10min"
 PATH_EXA = "home/exacloud/lustre1/fnl_lab"
 PATH_RUSH = "mnt/rose/shared"
 
-
-# All Functions (sorted alphabetically)
+# All Functions (below, sorted alphabetically)
 
 
 def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
@@ -193,12 +192,11 @@ def extract_subject_id_from(path):
     :param path: String which is a valid path to a CIFTI2 matrix file
     :return: String which is the subject ID which was in path
     """
-    # Where in path does subject ID start, where in path would the "_" between 
-    # "NDAR" and "INV" be, and where in path does the subject ID end
+    # Variables are where in path subject ID starts, where in path the "_" 
+    # between "NDAR" and "INV" is, and where in path the subject ID ends
     sub_id_pos = path.find("NDAR")  
     id_mid_pos = sub_id_pos + 4
     id_end_pos = sub_id_pos + 15
-
     return path[sub_id_pos:id_end_pos] if path[id_mid_pos] == "_" else (
         "_".join((path[sub_id_pos:id_mid_pos], path[id_mid_pos:id_end_pos]))
     )
@@ -264,11 +262,12 @@ def get_ASA_arg_names():
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
             "hide_legend", "inverse_fisher_z", "marker_size",
             "matlab_lower_bound", "matlab_no_edge", "matlab_rgba",
-            "matlab_show_thresh", "matlab_upper_bound", 
-            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs",
-            "output", "place_legend",  "parallel", "plot", "rounded_scatter",
-            "skip_subset_generation", "spearman_rho", "subset_size",
-            "title_font_size", "trace_titles", "plot_with_matlab", "y_range"]
+            "matlab_show", "matlab_upper_bound", "n_analyses", 
+            "nan_threshold", "no_matching", "only_make_graphs", "output",
+            "place_legend", "parallel", "plot", "roi_subset",
+            "rounded_scatter", "skip_subset_generation", "spearman_rho",
+            "subset_size", "title_font_size", "trace_titles",
+            "plot_with_matlab", "y_range"]
 
 
 def get_average_matrix(subset, paths_col, cli_args):
@@ -481,6 +480,19 @@ def get_pwd():
     pwd = os.path.dirname(os.path.abspath(sys.argv[0]))
     print("Running {} while in directory {}".format(sys.argv[0], pwd))
     return pwd
+
+
+def get_specific_sublist_of(a_list, indices):
+    """
+    :param a_list List (any)
+    :param indices: List of integers; each is the index of an element from
+                    a_list to place into the return list
+    :return: List including some elements of a_list
+    """
+    result = [0] * len(indices)
+    for i in range(len(indices)):
+        result[i] = a_list[indices[i]]
+    return result
 
 
 def get_shaded_area_bounds(all_data_df, to_fill):
@@ -793,31 +805,28 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   .format(", ".join(default_vis_titles().values())))
         )
 
-    # Optional: Path to average matrix .nii file for group 1
-    def group_1_avg_file():
+    def group_1_avg_file():  # Optional: Group 1 average matrix .nii file path
         parser.add_argument(
             "-avg1",
             as_cli_arg(GP_AV_FILE, 1),
             help=help_group_avg_file.format(1)
         )
 
-    # Optional: Path to average matrix .nii file for group 2
-    def group_2_avg_file():
+    def group_2_avg_file():  # Optional: Group 2 average matrix .nii file path
         parser.add_argument(
             "-avg2",
             as_cli_arg(GP_AV_FILE, 2),
             help=help_group_avg_file.format(2)
         )
 
-    # Optional: Path to matrix variance .nii file for group 1
-    def group_1_var_file():
+    def group_1_var_file():  # Optional: Group 1 variance matrix .nii file path
         parser.add_argument(
             "-var1",
             as_cli_arg(GP_VAR_FILE, 1),
             help=help_group_var_file.format(1)
         )
     
-    def group_2_var_file():  # Optional: Path to matrix variance .nii file for group 2
+    def group_2_var_file():  # Optional: Group 2 variance matrix .nii file path
         parser.add_argument(
             "-var2",
             as_cli_arg(GP_VAR_FILE, 2),
@@ -874,11 +883,10 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "visualization. {}".format(help_matlab))
         )
 
-    def matlab_show_thresh():
+    def matlab_show():
         parser.add_argument(
             "-mat-show",
-            "--matlab-show-thresh",
-            dest="matlab_show",
+            "--matlab-show",
             action="store_true",
             help=("Include this flag to display the threshold as a line on "
                   "the output visualization. {}".format(help_matlab))
@@ -908,8 +916,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "at on the visualization. {}".format(help_matlab))
         )
 
-    # Optional: .conc file with paths to group 1 matrix files
-    def matrices_conc_1():
+    def matrices_conc_1():  # Optional: .conc file w/ group 1 matrix file paths
         parser.add_argument(
             "-conc1",
             as_cli_arg(GP_MTR_FILE, 1),
@@ -917,8 +924,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=help_matrices_conc.format(1)
         )
 
-    # Optional: .conc file with paths to group 2 matrix files
-    def matrices_conc_2():
+    def matrices_conc_2():  # Optional: .conc file w/ group 2 matrix file paths
         parser.add_argument(
             "-conc2",
             as_cli_arg(GP_MTR_FILE, 2),
@@ -1034,6 +1040,20 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   + help_matlab)
         )
    
+
+    def roi_subset():  # Optional: Correlate random ROIs of, not entire, matrix
+        parser.add_argument(
+            "-roi",
+            "--roi-subset",
+            type=lambda x: x if (x is None) else valid_whole_number(x),
+            help=("By default, the script will compare a subset's entire "
+                  "matrix to a group's entire matrix. Include this argument "
+                  "to instead compare a randomly selected subset of ROIs, such "
+                  "that the same ROIs are compared in each matrix. This "
+                  "argument must be an integer greater than zero, specifying "
+                  "how many ROIs to randomly select.")
+        )
+
 
     def rounded_scatter():  # Optional: Fewer points in scatter plot
         parser.add_argument(
@@ -1226,7 +1246,6 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
                  subjects was created by shuffling some subjects around
         """
         subset_IDs = shuffle_out_subset_of(subset_IDs, shuffle_out, other_sibs)
-        shuffled_subset = group[group[id_var].isin(subset_IDs)]
         missing_post_shuffle = set()
         collect(subset, missing=missing_post_shuffle)
         return (0 if len(missing_post_shuffle) < len(subs_missing_sibs)
@@ -1251,13 +1270,12 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
             all_sibling_IDs.difference(subset_IDs, shuffle_out), stuck_if_at_10
         )
 
-    # If an extra subject was added to the subset, then remove them
+    # If an extra subject was added to the subset, then remove them and return
     if len(subset) > subset_size:
         to_remove = subset.sample(n=1)
         while to_remove[rel].iloc[0] > 0:
             to_remove = subset.sample(n=1)
         subset = subset.drop(to_remove.index)
-
     return subset 
 
 
@@ -1286,6 +1304,23 @@ def other_group_n(gp_num):
             else {"1": "2", "2": "1"}[gp_num])
 
 
+def prepare_2_subsets(subset1, subset2, rand_indices, cli_args):
+    """
+    :param subset1: pandas.DataFrame
+    :param subset2: pandas.DataFrame
+    :param rand_indices: List of randomly selected indices of both flat subsets
+    :param cli_args: argparse namespace with all given command-line arguments
+    :return: Tuple of both subsets, but flat--and stripped down to the indices
+             in rand_indices if the user used the --roi-subset argument
+    """
+    subset1 = subset1.flatten()
+    subset2 = subset2.flatten()
+    if cli_args.roi_subset:
+        subset1 = get_specific_sublist_of(subset1, rand_indices)
+        subset2 = get_specific_sublist_of(subset2, rand_indices)
+    return subset1, subset2
+
+
 def print_col_headers_and_get_widths(headers):
     """
     Prints the headers of every column in the chart of generated subsets' chi-
@@ -1297,6 +1332,19 @@ def print_col_headers_and_get_widths(headers):
     print("Subsets randomly generated:\n"
           + fit_strings_to_width(headers, col_widths))
     return col_widths
+
+
+def randint_list(start, stop, how_many):
+    """ 
+    :param start: Integer, the index to start at
+    :param start: Integer, the index to end at
+    :param how_many: Integer, the length of the list to return
+    :return: List of integers randomly selected from the specified range
+    """
+    result = [0] * how_many
+    for i in range(how_many):
+        result[i] = random.randint(start, stop)
+    return result
 
 
 def randomly_select_subset(group, group_n, sub_n, diff_group,
@@ -1354,7 +1402,6 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
                     "Subset", "Group", "Statistic", "P-Value",
                     "Significant Difference", "Euclidean Distance"
                 ))
-
     return subset if eu_threshold else eu_dist
 
 
