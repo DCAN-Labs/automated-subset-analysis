@@ -4,7 +4,7 @@
 SBATCH job submitter for automated subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2020-01-03
-Updated 2020-11-25
+Updated 2021-01-13
 """
 
 ##################################
@@ -38,8 +38,13 @@ def main():
          "parallel."), get_ASA_arg_names(), PWD
     )
 
-    cli_args["sbatch"] = ["sbatch", "--time={}".format(cli_args["time"]), 
-                          "--mem=1gb", "-c", "1", "-A", cli_args["account"], 
+    slurm_out = os.path.join(cli_args["output"], "slurm-out-{}.txt".format(
+        now().strftime("%Y-%b-%d-%H-%M")
+    ))
+    open(slurm_out, "w+").close() # os.makedirs(slurm_out, exist_ok=True) 
+    cli_args["sbatch"] = ["sbatch", "--time={}".format(cli_args["time"]),
+                          "--output", slurm_out, "-A", cli_args["account"], 
+                          "--mem={}gb".format(cli_args["memory"]), "-c", "1",
                           os.path.join(PWD, "automated_subset_analysis.py")]
 
     try:
@@ -76,6 +81,7 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
     # argument and converting cli_args into a dictionary
     default_acct = "feczk001"
     default_jobs = 100
+    default_gb_mem = 1
     default_sleep = 60
     default_time_limit = "04:00:00"
     parser.add_argument(
@@ -97,6 +103,13 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
         "-A", "--account",
         default=default_acct,
         help="Name of the account to submit the SBATCH job under."
+    )
+    parser.add_argument(
+        "-mem", "--memory",
+        type=valid_whole_number,
+        default=default_gb_mem,
+        help=("Memory in gigabytes (GB) to assign to each sbatch job. The "
+              "default number is {} GB.".format(default_gb_mem))
     )
     parser.add_argument(
         "-sleep",
@@ -182,7 +195,7 @@ def get_batch_command(cli_args, out_num, subset_size):
         cli_args[GP_DEMO_FILE.format(1)],
         cli_args[GP_DEMO_FILE.format(2)],
         "--output",
-        os.path.join(cli_args["output"],"output{}".format(out_num)),
+        os.path.join(cli_args["output"], OUTPUT_DIRNAME.format(out_num)),
         "--n-analyses", "1",
         "--parallel", PWD,
         "--subset-size", str(subset_size)
