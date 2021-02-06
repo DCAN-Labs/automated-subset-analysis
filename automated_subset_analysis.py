@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu or gconan@umn.edu
 Created 2019-09-17
-Updated 2021-01-1
+Updated 2021-01-13
 """
 
 ##################################
