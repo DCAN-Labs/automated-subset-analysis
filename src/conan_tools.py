@@ -4,7 +4,7 @@
 Conan Tools
 Greg Conan: conan@ohsu.edu or gconan@umn.edu
 Created 2019-11-26
-Updated 2021-01-13
+Updated 2021-08-24
 """
 
 ##################################
@@ -47,7 +47,7 @@ VAR = "variance"
 # All Functions (below, sorted alphabetically)
 
 
-def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
+def add_and_validate_gp_file(cli_args, gp_num, parser, gp_file_arg):
     """
     Get and validate path to a group's average or variance matrix, if not given
     :param cli_args: argparse namespace with most needed command-line
@@ -55,8 +55,6 @@ def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
                      --example-file arguments, but only the former is required
     :param gp_num: Integer which is the group number
     :param parser: argparse ArgumentParser to raise error if anything's invalid
-    :param default: String naming the demographic data spreadsheet's column
-                    with all of the paths to matrix files
     :param gp_file_arg: String naming the cli_args attribute to add to cli_args
     :return: cli_args, but with the gp_file_arg argument for group gp_num
     """
@@ -219,14 +217,23 @@ def extract_subject_id_from(path):
     :param path: String which is a valid path to a CIFTI2 matrix file
     :return: String which is the subject ID which was in path
     """
-    # Variables are where in path subject ID starts, where in path the "_" 
-    # between "NDAR" and "INV" is, and where in path the subject ID ends
-    sub_id_pos = path.find("NDAR")  
-    id_mid_pos = sub_id_pos + 4
-    id_end_pos = sub_id_pos + 15
-    return path[sub_id_pos:id_end_pos] if path[id_mid_pos] == "_" else (
-        "_".join((path[sub_id_pos:id_mid_pos], path[id_mid_pos:id_end_pos]))
-    )
+    if "NDAR" in path:
+        # Variables are where in path subject ID starts, where in path the "_" 
+        # between "NDAR" and "INV" is, and where in path the subject ID ends
+        sub_id_pos = path.find("NDAR")  
+        id_mid_pos = sub_id_pos + 4
+        id_end_pos = sub_id_pos + 15
+        subj_id = path[sub_id_pos:id_end_pos] if path[id_mid_pos] == "_" else (
+            "_".join((path[sub_id_pos:id_mid_pos], path[id_mid_pos:id_end_pos]))
+        )
+    elif "INV" in path:
+        sub_id_pos = path.find("INV") + 3
+        id_end_pos = sub_id_pos + 8
+        subj_id = "sub-NDARINV" + path[sub_id_pos:id_end_pos]
+    else:
+        sys.exit("Cannot find subject ID ('NDAR_INVxxxxxxxx') in path {}"
+                 .format(path))
+    return subj_id
 
 
 def fit_strings_to_width(elements, widths):
@@ -284,17 +291,17 @@ def get_ASA_arg_names():
              automated_subset_analysis.py as a cli_args argparse parameter
     """
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
-            "calculate", "columns", "comparisons", "euclidean", "fill",
-            GP_AV_FILE.format(1), GP_AV_FILE.format(2), GP_MTR_FILE.format(1),
-            GP_MTR_FILE.format(2), "graph_title", GP_VAR_FILE.format(1),
-            GP_VAR_FILE.format(2), "hide_legend", "inverse_fisher_z",
-            "marker_size", "matlab_lower_bound", "matlab_no_edge",
-            "matlab_rgba", "matlab_show", "matlab_upper_bound", "n_analyses", 
-            "nan_threshold", "no_matching", "only_make_graphs", "output",
-            "place_legend", "parallel", "plot", "roi_subset",
-            "rounded_scatter", "skip_subset_generation", "spearman_rho",
-            "subset_size", "title_font_size", "trace_titles",
-            "plot_with_matlab", "y_range"]
+            "calculate", "columns", "comparisons", "demo_col_mx",
+            "demo_col_subj", "euclidean", "fill", GP_AV_FILE.format(1),
+            GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
+            "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
+            "hide_legend", "inverse_fisher_z", "marker_size",
+            "matlab_lower_bound", "matlab_no_edge", "matlab_rgba",
+            "matlab_show", "matlab_upper_bound", "n_analyses", "nan_threshold",
+            "no_matching", "only_make_graphs", "output", "place_legend",
+            "parallel", "plot", "roi_subset", "rounded_scatter",
+            "skip_subset_generation", "spearman_rho", "subset_size",
+            "title_font_size", "trace_titles", "plot_with_matlab", "y_range"]
 
 
 def get_average_matrix(subset, paths_col, cli_args):
@@ -551,16 +558,17 @@ def get_specific_sublist_of(a_list, indices):
     return result
 
 
-def get_subset_of(group, subset_size):
+def get_subset_of(group, subset_size, demo_col_subj):
     """
     Randomly select, validate, and return a subset of a given size from group
     :param group: pandas.DataFrame which is an entire group of subjects
     :param subset_size: Integer which is the amount of subjects to randomly 
                         select from group to put into a subset
+    :param demo_col_subj: String naming the demo .csv files' subject ID column
     :return: pandas.DataFrame which is a valid subset of group
     """
     # Constants: names of demographic variables for IDs of subject and family
-    ID = "id_redcap"
+    ID = demo_col_subj 
     FAMILY = {"FAM": "rel_family_id", "REL": "rel_relationship",
               "GRP": "rel_group_id"}
 
@@ -605,8 +613,11 @@ def get_subset_number_from(path):
     :return: None if there is no number in the base name of path; otherwise
              the last number in the base name of path
     """
-    subset_number = re.findall(r"\d+", os.path.basename(os.path.dirname(path)))
-    return None if subset_number is None else int(subset_number[-1])
+    parent = os.path.basename(os.path.dirname(path))
+    path_with_subset_number = (parent if parent[:7] == "output" and 
+                               len(parent) > 6 else os.path.basename(path))
+    subset_number = re.findall(r"\d+", path_with_subset_number)
+    return None if subset_number is None else int(subset_number[-2])
 
 
 def get_subsets_from_dir(dirpath, all_subsets, cli_args, subset_name_parts,
@@ -621,7 +632,7 @@ def get_subsets_from_dir(dirpath, all_subsets, cli_args, subset_name_parts,
     :param sub_ID_var: String naming the subject ID variable in the group
                        demographics files
     :return: all_subsets, filled with all subsets within the folder at dirpath
-    """
+    """  # TODO Verify this function; it's unclear if prior tests were complete
     dir_contents = os.listdir(dirpath)
     dir_contents.sort()
     for eachfile in dir_contents:
@@ -635,15 +646,11 @@ def get_subsets_from_dir(dirpath, all_subsets, cli_args, subset_name_parts,
             sub_num = get_subset_number_from(eachpath)
             if sub_num is None or sub_num <= cli_args.n_analyses:
                 subset = read_in_subset_from(eachpath, cli_args,
-                                            gp_demo_str, subj_ID_var)
+                                             gp_demo_str, subj_ID_var)
                 if subset:
                     all_subsets.append(subset)
-                    print("Added subset of size {}, len(all_subsets)=={}".format(subset["subset_size"], len(all_subsets)))  # TODO REMOVE THIS LINE
             else:
                 break
-    # print("All subsets:\n{}".format(all_subsets))  # TODO REMOVE THIS LINE
-        else:  # TODO REMOVE THIS LINE
-            print("No subset in {}".format(os.path.basename(eachfile)))  # TODO REMOVE THIS LINE
     return all_subsets
 
 
@@ -726,6 +733,8 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     choices_plot = ["scatter", "stdev", []]  # See stackoverflow.com/q/57739309
     default_continuous_vars = ['demo_prnt_ed_v2b', 'interview_age', 
                                'rel_group_id', 'rel_relationship']
+    default_demo_col_mx_path = "pconn10min"
+    default_demo_col_subj_ID = "id_redcap"
     default_euclid_vals = [-0.44897407617376806, 3.7026679337563486]
     default_marker_size = 5
     default_n_analyses = 1
@@ -736,6 +745,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     default_text_size_title = 40
 
     # Help messages used by multiple input parameters
+    help_demo_col = "Name of the demographics .csv files' column containing "
     help_demo_file = ("Path to a .csv file containing all demographic "
                       "information about the subjects in group {}.")
     help_font_size = ("Font size of {0} text in visualization. Enter a "
@@ -797,7 +807,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
 
     def columns():  # Optional: Specify which columns to match on
         parser.add_argument(
-            "-c",
+            "-col",
             "--columns",
             nargs="*",
             default=default_cols,
@@ -832,6 +842,24 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=default_continuous_vars,
             help=("All names of columns in the demographics .csv file which "
                   "have continuous instead of categorical data.")
+        )
+
+    def demo_col_mx():
+        parser.add_argument(
+            "-demo-col-mx-path",
+            "--demographics-column-matrix-path",
+            dest="demo_col_mx",
+            default=default_demo_col_mx_path,
+            help=help_demo_col + "paths to .nii matrix files."
+        )
+
+    def demo_col_subj():
+        parser.add_argument(
+            "-demo-col-subj-ID",
+            "--demographics-column-subject-ID",
+            dest="demo_col_subj",
+            default=default_demo_col_subj_ID,
+            help=help_demo_col + "subject IDs."
         )
 
     # Optional: Custom logarithmic function for Euclidean distance threshold
@@ -1329,10 +1357,11 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
         """
         subset_IDs = shuffle_out_subset_of(subset_IDs, shuffle_out, other_sibs)
         missing_post_shuffle = set()
+        subset = group[group[id_var].isin(subset_IDs)]  # Moved 2021-04-30
         if after:
             collect(subset, missing=missing_post_shuffle)
         else:
-            subset = group[group[id_var].isin(subset_IDs)]
+            # subset = group[group[id_var].isin(subset_IDs)]
             collect(subset)
         return (0 if len(missing_post_shuffle) < len(subs_missing_sibs) else
                 stuck_if) if after else (subset, subset_IDs, subs_missing_sibs)
@@ -1343,6 +1372,7 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
         mis_sibs_before = len(subs_missing_sibs)
 
         # TODO check if the block below replicates the commented block
+        """
         subset, subset_IDs, subs_missing_sibs = shuffle_subsets(
             subset_IDs, subs_missing_sibs,
             all_sibling_IDs.difference(subset_IDs), stuck_if_at_10, False
@@ -1355,7 +1385,7 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
         subset = group[group[id_var].isin(subset_IDs)]
         subs_missing_sibs = set()
         collect(subset)
-        """
+        
         if len(subs_missing_sibs) == mis_sibs_before:
             stuck_if_at_10 += 1
         shuffle_out = set(random.sample(subset_IDs, 10))
@@ -1461,9 +1491,10 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
     # Get information about group total dataframe for chi square comparison,
     # excluding any column where all subjects have the same value (GROUP) or
     # nearly all have different values (rel_family_id)
-    columns = group.select_dtypes(include=["number"]).drop([
-        "GROUP", "rel_family_id"
-    ], axis="columns")
+    columns = group.select_dtypes(include=["number"])
+    for to_drop in ("GROUP", "rel_family_id"):
+        if to_drop in columns:
+            columns = columns.drop([to_drop], axis="columns")
     group_avgs = get_group_avgs_or_vars(diff_group, columns)
     
     # Randomly pick subsets until finding 1 that demographically represents    
@@ -1476,7 +1507,7 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
 
         # Generate subset of group and get its columns' averages as a list
         subset = (group.sample(n=sub_n) if cli_args.no_matching
-                  else get_subset_of(group, sub_n))
+                  else get_subset_of(group, sub_n, cli_args.demo_col_subj))
         sub_avgs = get_group_avgs_or_vars(subset, columns)
 
         # If any column in subset averages has mean of N/A, throw it out

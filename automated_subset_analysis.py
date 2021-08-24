@@ -4,7 +4,7 @@
 Automated subset selection and analysis for ABCD resource paper
 Greg Conan: conan@ohsu.edu or gconan@umn.edu
 Created 2019-09-17
-Updated 2021-01-13
+Updated 2021-08-24
 """
 
 ##################################
@@ -36,8 +36,8 @@ from src.conan_tools import *
 # Constants: Default demographic variable names, PWD, and MATLAB plot code info
 DEFAULT_CF = "correlations_{}.csv"
 DEFAULT_DEM_VAR_MATR = "matrix_file"
-DEFAULT_DEM_VAR_PCONNS = "pconn10min"
-DEFAULT_DEM_VAR_SUBJID = "id_redcap"
+# DEFAULT_DEM_VAR_PCONNS = "pconn_10min" # "pconn10min"
+# DEFAULT_DEM_VAR_SUBJID = "subjectkey_mplus" # "id_redcap"
 DEFAULT_MAT_CSV = "matlab_parameters_{}.csv"
 DEFAULT_OPACITY = 0.3
 GP_DEMO_STR = "group_{}_demo"
@@ -152,12 +152,12 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
         # Add paths to matrices if the user gave paths in separate .conc file
         matr_conc = getattr(cli_args, GP_MTR_FILE.format(gp_num), None)
         setattr(cli_args, group_demo_str, demographics if not matr_conc else
-                replace_paths_column(demographics, matr_conc))
+                replace_paths_column(cli_args, demographics, matr_conc))
 
         # Get average matrix for each group
         gp_av_arg = GP_AV_FILE.format(gp_num)
         cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
-                                            DEFAULT_DEM_VAR_PCONNS, gp_av_arg)
+                                            gp_av_arg)
         setattr(cli_args, "group_{}_avg".format(gp_num),
                 load_matrix_from(getattr(cli_args, gp_av_arg)))
 
@@ -165,7 +165,7 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
         if cli_args.calculate in (VAR, "effect-size"):
             gp_v_f = GP_VAR_FILE.format(gp_num)
             cli_args = add_and_validate_gp_file(cli_args, gp_num, parser,
-                                                DEFAULT_DEM_VAR_PCONNS, gp_v_f)
+                                                gp_v_f)
             fname = ("group_{}_variance_matrix{}"
                      .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
             if not getattr(cli_args, gp_v_f, None):
@@ -173,8 +173,9 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
     return cli_args
 
 
-def replace_paths_column(demographics, matr_conc):
+def replace_paths_column(cli_args, demographics, matr_conc):
     """
+    :param cli_args: argparse namespace with most needed command-line arguments
     :param demographics: pandas.DataFrame with demographic information,
                          including 0 or 1 column(s) with paths to matrix files
     :param matr_conc: String, valid path to a .conc file with matrix file paths
@@ -184,12 +185,12 @@ def replace_paths_column(demographics, matr_conc):
     matrix_paths = pd.read_csv(matr_conc, converters={
         0: rename_exacloud_path
     }, sep="\n", header=None).rename(columns=lambda x: DEFAULT_DEM_VAR_MATR)    
-    matrix_paths[DEFAULT_DEM_VAR_SUBJID] = matrix_paths.apply(lambda x: (
+    matrix_paths[cli_args.demo_col_subj] = matrix_paths.apply(lambda x: (
         extract_subject_id_from(x.loc[DEFAULT_DEM_VAR_MATR])
     ), axis="columns")
-    if DEFAULT_DEM_VAR_PCONNS in demographics:
-        demographics = demographics.drop(DEFAULT_DEM_VAR_PCONNS, axis=1)
-    return demographics.merge(matrix_paths, on=DEFAULT_DEM_VAR_SUBJID)
+    if cli_args.demo_col_mx in demographics:
+        demographics = demographics.drop(cli_args.demo_col_mx, axis=1)
+    return demographics.merge(matrix_paths, on=cli_args.demo_col_subj)
     
 
 def only_make_graphs(cli_args):
@@ -228,10 +229,10 @@ def skip_subset_generation(cli_args, subsets_file_name):
     # Get every subset based on cli_args, excluding other files in the same dir
     all_subsets = get_subsets_from_dir(  # Return value: List of subsets
         cli_args.skip_subset_generation, [], cli_args,
-        subsets_file_name.split("{}"), GP_DEMO_STR, DEFAULT_DEM_VAR_SUBJID
+        subsets_file_name.split("{}"), GP_DEMO_STR, cli_args.demo_col_subj
     )
     if len(all_subsets) == 0:
-        err = ("nNo subsets with ", *[(len(cli_args.subset_size)-1)*("{}, ")],
+        err = ("No subsets with ", *[(len(cli_args.subset_size)-1)*("{}, ")],
                "or {} subjects found at this path:\n{}\n\n",
                "Try changing your --subset-size and/or --n-analyses.\n")
         raise FileNotFoundError("".join(err).format(
@@ -279,7 +280,7 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
 
             # Save randomly generated subsets
             save_subsets(subsets, cli_args.output, i + 1,
-                         subsets_file_name, DEFAULT_DEM_VAR_SUBJID)
+                         subsets_file_name, cli_args.demo_col_subj)
             subsets["subset_size"] = sub_n
             all_subsets.append(subsets)
             progress = update_progress(progress, "making subsets", sub_n, strt)
@@ -491,7 +492,7 @@ def get_matr_file_col_name(cli_args):
     :return: String naming demographics .csv column with .nii matrix
     """
     return (DEFAULT_DEM_VAR_MATR if getattr(cli_args, "matrices_conc_1", None)
-            else DEFAULT_DEM_VAR_PCONNS) 
+            else cli_args.demo_col_mx) 
 
 
 def get_sub_pair_correls(subset_size, correl_lists, subsets, rho=None):

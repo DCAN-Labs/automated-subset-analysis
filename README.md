@@ -28,7 +28,7 @@ Installation should be simple:
 
 ### Dependencies
 
-- The only dependency is [Python 3.5.2](https://www.python.org/downloads/release/python-352) or greater.
+- The only dependency is [Python 3.6.8](https://www.python.org/downloads/release/python-368) or greater.
 
 ### Python Packages
 
@@ -218,5 +218,5 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Updated by Greg Conan, 2020-12-01
+- Updated by Greg Conan, 2021-08-24
  
