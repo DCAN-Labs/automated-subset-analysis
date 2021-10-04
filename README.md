@@ -28,7 +28,7 @@ Installation should be simple:
 
 ### Dependencies
 
-- The only dependency is [Python 3.5.2](https://www.python.org/downloads/release/python-352) or greater.
+- The only dependency is [Python 3.6.8](https://www.python.org/downloads/release/python-368) or greater.
 
 ### Python Packages
 
@@ -139,11 +139,11 @@ The following arguments only apply when making a visualization using the compile
 
 1. `--plot-with-matlab` takes one string, a valid path to an existing directory for the MATLAB Runtime Environment v9.4. Include this flag to create the output visualization using compiled MATLAB "MultiShadedBars" code (see `src`). Otherwise, none of the `matlab` flags will do anything and the subset analysis code will produce an output visualization using `plotly`.
 
-1. `--matlab-lower-bound"` takes one decimal number between 0 and 1, the lower bound of data to display on the MATLAB output visualization.
+1. `--matlab-lower-bound` takes one decimal number between 0 and 1, the lower bound of data to display on the MATLAB output visualization.
 
 1. `--matlab-no-edge` takes no parameters. By default, the output visualization will display an edge. Include this flag to hide that edge.
 
-1. `--matlab-show-threshold` takes no parameters. Include this flag to display the threshold as a line on the output visualization. Otherwise, the line will not be shown.
+1. `--matlab-show` takes no parameters. Include this flag to display the threshold as a line on the output visualization. Otherwise, the line will not be shown.
 
 1. `--matlab-upper-bound` takes one decimal number between 0 and 1, the upper bound of data to display on the MATLAB output visualization.
 
@@ -218,4 +218,5 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 Information about this `README` file:
 
 - Created by Greg Conan, 2019-10-03
-- Updated by Greg Conan, 2020-11-25
+- Updated by Greg Conan, 2021-08-24
+ 

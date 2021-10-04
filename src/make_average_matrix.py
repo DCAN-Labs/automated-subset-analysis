@@ -4,7 +4,7 @@
 Average matrix creation for automated subset analysis script
 Greg Conan: conan@ohsu.edu
 Created 2019-11-20
-Updated 2020-09-11
+Updated 2021-04-30
 """
 
 ##################################
@@ -13,10 +13,7 @@ Updated 2020-09-11
 # automated_subset_analysis.py
 #
 ##################################
-
-# Imports
 import argparse
-from conan_tools import *
 import nibabel
 import numpy as np
 import os
@@ -24,8 +21,16 @@ import pandas as pd
 import socket
 import sys
 
+# Ensure that this script can find its local imports if parallel processing
+if "--parallel" in sys.argv:
+    sys.path.append(os.path.abspath(sys.argv[sys.argv.index("--parallel")
+                                             + 1]))
+
+# Local custom imports
+from src.conan_tools import *
+
 # Constants
-PWD = get_pwd()
+PWD = sys.path[-1] if '--parallel' in sys.argv else get_pwd()
 
 
 def main():
@@ -38,9 +43,12 @@ def main():
         "Script to get the average matrices of two subject sets",
         ("example_file", GP_AV_FILE.format(1), GP_AV_FILE.format(2), 
          "inverse_fisher_z", GP_MTR_FILE.format(1), GP_MTR_FILE.format(2), 
-         "output", "calculate"),
+         "calculate", "parallel"),  # "output", 
         PWD, validate_cli_args
     )
+    cli_args.output = os.path.dirname(cli_args.group_1_avg_file)
+
+    print(vars(cli_args))
     
     # Make and save average matrix for each group
     # The strings passed to build_avg_matrix below are the names of the group

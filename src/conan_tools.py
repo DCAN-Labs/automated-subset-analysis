@@ -2,14 +2,14 @@
 
 """
 Conan Tools
-Greg Conan: conan@ohsu.edu
+Greg Conan: conan@ohsu.edu or gconan@umn.edu
 Created 2019-11-26
-Updated 2020-11-25
+Updated 2021-08-24
 """
 
 ##################################
 #
-# Common source for utility functions used by multiple scripts in the
+# Common source for all utility functions used by multiple scripts in the
 # automated_subset_analysis folder/module
 #
 ##################################
@@ -39,11 +39,15 @@ MATRIX_COL = "pconn10min"
 PATH_EXA = "home/exacloud/lustre1/fnl_lab"
 PATH_RUSH = "mnt/rose/shared"
 
+# Convenience string nicknames
+AVG = "average"
+OUTPUT_DIRNAME = "output{}"
+VAR = "variance"
 
-# All Functions (sorted alphabetically)
+# All Functions (below, sorted alphabetically)
 
 
-def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
+def add_and_validate_gp_file(cli_args, gp_num, parser, gp_file_arg):
     """
     Get and validate path to a group's average or variance matrix, if not given
     :param cli_args: argparse namespace with most needed command-line
@@ -51,8 +55,6 @@ def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
                      --example-file arguments, but only the former is required
     :param gp_num: Integer which is the group number
     :param parser: argparse ArgumentParser to raise error if anything's invalid
-    :param default: String naming the demographic data spreadsheet's column
-                    with all of the paths to matrix files
     :param gp_file_arg: String naming the cli_args attribute to add to cli_args
     :return: cli_args, but with the gp_file_arg argument for group gp_num
     """
@@ -84,6 +86,18 @@ def add_and_validate_gp_file(cli_args, gp_num, parser, default, gp_file_arg):
         parser.error(str(e))
 
 
+def aggregate_data(qtl, all_data_df):
+    """
+    Aggregate correlation values for get_shaded_area_bounds
+    :param qtl: Integer representing the quantile of data to aggregate
+    :param all_data_df: pandas.DataFrame with all correlation values
+    :return: pandas.Series with all aggregated correlation values
+    """
+    return all_data_df.groupby(["Subjects"]).agg(
+        lambda x: x.quantile(qtl)
+    )["Correlation"]
+
+
 def as_cli_arg(arg_str, gp_num=None):
     """
     :param arg_str: String naming a stored argument taken from the command line
@@ -105,6 +119,16 @@ def chdir_to(folder):
     abs_dir = os.path.abspath(folder)
     if os.path.abspath(os.getcwd()) != abs_dir:
         os.chdir(abs_dir)
+
+
+def check_nonempty_df(a_df, err_msg):
+    """
+    Crash the script if a_df is empty
+    :param a_df: pandas.DataFrame
+    :param err_msg: String, error message to print if a_df is empty
+    """
+    if a_df.empty:
+        sys.exit("\nError: {}\n".format(err_msg))
 
 
 def count_digits_of(a_num):
@@ -193,15 +217,23 @@ def extract_subject_id_from(path):
     :param path: String which is a valid path to a CIFTI2 matrix file
     :return: String which is the subject ID which was in path
     """
-    # Where in path does subject ID start, where in path would the "_" between 
-    # "NDAR" and "INV" be, and where in path does the subject ID end
-    sub_id_pos = path.find("NDAR")  
-    id_mid_pos = sub_id_pos + 4
-    id_end_pos = sub_id_pos + 15
-
-    return path[sub_id_pos:id_end_pos] if path[id_mid_pos] == "_" else (
-        "_".join((path[sub_id_pos:id_mid_pos], path[id_mid_pos:id_end_pos]))
-    )
+    if "NDAR" in path:
+        # Variables are where in path subject ID starts, where in path the "_" 
+        # between "NDAR" and "INV" is, and where in path the subject ID ends
+        sub_id_pos = path.find("NDAR")  
+        id_mid_pos = sub_id_pos + 4
+        id_end_pos = sub_id_pos + 15
+        subj_id = path[sub_id_pos:id_end_pos] if path[id_mid_pos] == "_" else (
+            "_".join((path[sub_id_pos:id_mid_pos], path[id_mid_pos:id_end_pos]))
+        )
+    elif "INV" in path:
+        sub_id_pos = path.find("INV") + 3
+        id_end_pos = sub_id_pos + 8
+        subj_id = "sub-NDARINV" + path[sub_id_pos:id_end_pos]
+    else:
+        sys.exit("Cannot find subject ID ('NDAR_INVxxxxxxxx') in path {}"
+                 .format(path))
+    return subj_id
 
 
 def fit_strings_to_width(elements, widths):
@@ -259,14 +291,15 @@ def get_ASA_arg_names():
              automated_subset_analysis.py as a cli_args argparse parameter
     """
     return [GP_DEMO_FILE.format(1), GP_DEMO_FILE.format(2), "axis_font_size", 
-            "calculate", "columns", "euclidean", "fill", GP_AV_FILE.format(1),
+            "calculate", "columns", "comparisons", "demo_col_mx",
+            "demo_col_subj", "euclidean", "fill", GP_AV_FILE.format(1),
             GP_AV_FILE.format(2), GP_MTR_FILE.format(1), GP_MTR_FILE.format(2),
             "graph_title", GP_VAR_FILE.format(1), GP_VAR_FILE.format(2),
             "hide_legend", "inverse_fisher_z", "marker_size",
             "matlab_lower_bound", "matlab_no_edge", "matlab_rgba",
-            "matlab_show_thresh", "matlab_upper_bound", 
-            "n_analyses", "nan_threshold", "no_matching", "only_make_graphs",
-            "output", "place_legend",  "parallel", "plot", "rounded_scatter",
+            "matlab_show", "matlab_upper_bound", "n_analyses", "nan_threshold",
+            "no_matching", "only_make_graphs", "output", "place_legend",
+            "parallel", "plot", "roi_subset", "rounded_scatter",
             "skip_subset_generation", "spearman_rho", "subset_size",
             "title_font_size", "trace_titles", "plot_with_matlab", "y_range"]
 
@@ -294,9 +327,11 @@ def get_average_matrix(subset, paths_col, cli_args):
     for subj in subject_matrix_paths:
         i += 1
         next_matrix = load_matrix_from(subj[1])
-        running_total = np.add(running_total, next_matrix)
-        running_total_sq = np.add(running_total_sq, np.square(next_matrix))
-        just_printed = display_progress(subset, i, subset_size, just_printed)
+        if not np.isnan(np.min(next_matrix)):
+            running_total = np.add(running_total, next_matrix)
+            running_total_sq = np.add(running_total_sq, np.square(next_matrix))
+            just_printed = display_progress(subset, i, subset_size,
+                                            just_printed)
 
     # Divide running total matrix by number of matrices
     divisor_matrix = get_divisor_matrix(running_total.shape, subset_size)
@@ -305,8 +340,8 @@ def get_average_matrix(subset, paths_col, cli_args):
                              np.square(avg_matrix))
     
     # Return average matrix and/or variance matrix depending on --calculate
-    return {"mean": avg_matrix, "variance": var_matrix, 
-            "effect-size": {"average": avg_matrix, "variance": var_matrix}
+    return {"mean": avg_matrix, VAR: var_matrix, 
+            "effect-size": {AVG: avg_matrix, VAR: var_matrix}
             }[cli_args.calculate]
 
 
@@ -345,20 +380,6 @@ def get_confidence_interval(series, confidence=0.95):
     return series_mean - distance_from_mean, series_mean + distance_from_mean
 
 
-def get_correls_between(arr1, arr2, num_subjects, corr=None):
-    """
-    :param arr1: np.ndarray with only numeric values
-    :param arr2: np.ndarray with only numeric values
-    :param num_subjects: Integer, number of subjects in each group
-    :param corr: Function which, given 2 arrays, returns their correlation
-    :return: Dictionary mapping "Subjects" to num_subjects and mapping
-             "Correlation" to the correlation between arr1 and arr2 
-    """
-    if not corr:  # By default, use numpy to return the Pearson's r
-        corr = lambda x, y: np.corrcoef(x, y)[0, 1]
-    return {"Subjects": num_subjects, "Correlation": corr(arr1, arr2)}
-
-
 def get_divisor_matrix(shape, size):
     """
     :param shape: Tuple of integers describing the shape of a numpy.ndarray
@@ -381,6 +402,17 @@ def get_family_info(subject, family_vars):
              the variable by that name in subject
     """
     return {prop: int(subject[prop]) for prop in family_vars}
+
+
+def get_gp_subsets_demo(subset_df, cli_args, gp_demo_str, subj_ID_var):
+    """
+    Get both groups' subsets' demographics data
+    :return: pandas.Series with all of a subset's data from both groups
+    """
+    demo = lambda x: getattr(cli_args, gp_demo_str.format(x))
+    return {gp_num: demo(gp_num)[demo(gp_num)[subj_ID_var]
+                                 .isin(subset_df.pop(str(gp_num)).tolist())]
+            for gp_num in (1, 2)}
 
 
 def get_group_avgs_or_vars(group, columns):
@@ -444,8 +476,7 @@ def get_group_variance_matrix(gp_demo, cli_args, gp_num, matr_col):
     if os.access(gp_var_matrix_file, os.R_OK):
         gp_var_mx = load_matrix_from(gp_var_matrix_file)
     else:
-        gp_var_mx = get_average_matrix(gp_demo, matr_col,
-                                       cli_args)["variance"]
+        gp_var_mx = get_average_matrix(gp_demo, matr_col, cli_args)[VAR]
         save_to_cifti2(gp_var_mx, example, gp_var_matrix_file)
     return gp_var_mx
 
@@ -485,6 +516,7 @@ def get_pwd():
 
 def get_shaded_area_bounds(all_data_df, to_fill):
     """
+    Calculate bounds of shaded area depending on which area to_fill
     :param all_data_df: pandas.DataFrame with two columns of numeric values, 
                         labeled "Subjects" and "Correlation"
     :param to_fill: String that is either "all" to shade the area between the
@@ -495,44 +527,48 @@ def get_shaded_area_bounds(all_data_df, to_fill):
     :return: Tuple of 2 pandas.Series objects where the first is the lower
              boundary of the shaded area and the second is the upper boundary
     """
-    # Local function to aggregate correlation values
-    def aggregate_data(quantile):
-        """
-        :param quantile: Integer representing the quantile of data to aggregate
-        :return: pandas.Series with all aggregated correlation values
-        """
-        return all_data_df.groupby(["Subjects"]).agg(
-            lambda x: x.quantile(quantile)
-        )["Correlation"]
-
-    # Calculate bounds of shaded area depending on which area to_fill
     if to_fill == "all":
-        result = (aggregate_data(0), aggregate_data(1))
+        bounds = (aggregate_data(0, all_data_df),
+                  aggregate_data(1, all_data_df))
     elif to_fill == "confidence_interval":
         intervals = all_data_df.groupby(["Subjects"]).agg(
             lambda x: get_confidence_interval(x)
         )
         intervals = pd.DataFrame(intervals["Correlation"].tolist(),
                                  index=intervals.index)
-        result = (intervals[0], intervals[1])
+        bounds = (intervals[0], intervals[1])
     elif to_fill == "stdev":
         invls = all_data_df.groupby(["Subjects"]).agg(lambda x: x.std())
-        result = pd.DataFrame(invls["Correlation"].tolist(), index=invls.index)
+        bounds = pd.DataFrame(invls["Correlation"].tolist(), index=invls.index)
     else:
         raise ValueError("Invalid value for --fill parameter.")                        
+    return bounds
+
+
+def get_specific_sublist_of(a_list, indices):
+    """
+    :param a_list List (any)
+    :param indices: List of integers; each is the index of an element from
+                    a_list to place into the return list
+    :return: List including some elements of a_list
+    """
+    result = [0] * len(indices)
+    for i in range(len(indices)):
+        result[i] = a_list[indices[i]]
     return result
 
 
-def get_subset_of(group, subset_size):
+def get_subset_of(group, subset_size, demo_col_subj):
     """
     Randomly select, validate, and return a subset of a given size from group
     :param group: pandas.DataFrame which is an entire group of subjects
     :param subset_size: Integer which is the amount of subjects to randomly 
                         select from group to put into a subset
+    :param demo_col_subj: String naming the demo .csv files' subject ID column
     :return: pandas.DataFrame which is a valid subset of group
     """
     # Constants: names of demographic variables for IDs of subject and family
-    ID = "id_redcap"
+    ID = demo_col_subj 
     FAMILY = {"FAM": "rel_family_id", "REL": "rel_relationship",
               "GRP": "rel_group_id"}
 
@@ -569,6 +605,53 @@ def get_subset_of(group, subset_size):
     collect_invalid_members_of(subset)
     return make_subset_valid(subs_missing_sibs, collect_invalid_members_of,
                              subset, group, FAMILY["REL"], ID, subset_size)
+
+
+def get_subset_number_from(path):
+    """
+    :param path: String, a path to a file/dir/etc with a number in its name
+    :return: None if there is no number in the base name of path; otherwise
+             the last number in the base name of path
+    """
+    parent = os.path.basename(os.path.dirname(path))
+    path_with_subset_number = (parent if parent[:7] == "output" and 
+                               len(parent) > 6 else os.path.basename(path))
+    subset_number = re.findall(r"\d+", path_with_subset_number)
+    return None if subset_number is None else int(subset_number[-2])
+
+
+def get_subsets_from_dir(dirpath, all_subsets, cli_args, subset_name_parts,
+                         gp_demo_str, subj_ID_var):
+    """
+    Recursive function to get all subsets that are descendants of a directory
+    :param dirpath: String, the path to a real directory
+    :param all_subsets: List which may contain subset dictionaries
+    :param cli_args: argparse.Namespace object with all command-line arguments
+    :param subset_name_parts: List of strings which are part of subset filename
+    :param gp_demo_str: String naming the cli_args group demographics attribute
+    :param sub_ID_var: String naming the subject ID variable in the group
+                       demographics files
+    :return: all_subsets, filled with all subsets within the folder at dirpath
+    """  # TODO Verify this function; it's unclear if prior tests were complete
+    dir_contents = os.listdir(dirpath)
+    dir_contents.sort()
+    for eachfile in dir_contents:
+        eachpath = os.path.join(dirpath, eachfile)
+        if os.path.isdir(eachpath):
+            all_subsets = get_subsets_from_dir(eachpath, all_subsets,
+                                               cli_args, subset_name_parts,
+                                               gp_demo_str, subj_ID_var)
+        elif is_subset_csv(eachpath, subset_name_parts,
+                           cli_args.n_analyses):
+            sub_num = get_subset_number_from(eachpath)
+            if sub_num is None or sub_num <= cli_args.n_analyses:
+                subset = read_in_subset_from(eachpath, cli_args,
+                                             gp_demo_str, subj_ID_var)
+                if subset:
+                    all_subsets.append(subset)
+            else:
+                break
+    return all_subsets
 
 
 def get_which_str_in_filename(filename, possible_names):
@@ -645,11 +728,13 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                     'demo_sex_v2b', 'ehi_y_ss_scoreb', 'interview_age',
                     'medhx_9a', 'race_ethnicity', 'rel_relationship',
                     'site_id_l']
-    choices_calculate = ["mean", "variance", "effect-size"]
+    choices_calculate = ["mean", VAR, "effect-size"]
     choices_fill = ["all", "confidence_interval"]
     choices_plot = ["scatter", "stdev", []]  # See stackoverflow.com/q/57739309
     default_continuous_vars = ['demo_prnt_ed_v2b', 'interview_age', 
                                'rel_group_id', 'rel_relationship']
+    default_demo_col_mx_path = "pconn10min"
+    default_demo_col_subj_ID = "id_redcap"
     default_euclid_vals = [-0.44897407617376806, 3.7026679337563486]
     default_marker_size = 5
     default_n_analyses = 1
@@ -660,6 +745,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     default_text_size_title = 40
 
     # Help messages used by multiple input parameters
+    help_demo_col = "Name of the demographics .csv files' column containing "
     help_demo_file = ("Path to a .csv file containing all demographic "
                       "information about the subjects in group {}.")
     help_font_size = ("Font size of {0} text in visualization. Enter a "
@@ -669,9 +755,9 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                              "for group {0}. By default, this path will be to "
                              "group{0}_{2}.pconn.nii file in this script's "
                              "parent folder or the --output folder.")
-    help_group_avg_file = help_group_avg_or_var.format("{0}", "average",
+    help_group_avg_file = help_group_avg_or_var.format("{0}", AVG,
                                                        "10min_mean")
-    help_group_var_file = help_group_avg_or_var.format("{0}", "variance",
+    help_group_var_file = help_group_avg_or_var.format("{0}", VAR,
                                                        "variance_matrix")
     help_matlab = ("Only include this argument if you want to make the "
                   "visualization using compiled MATLAB code instead of using "
@@ -721,13 +807,30 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
 
     def columns():  # Optional: Specify which columns to match on
         parser.add_argument(
-            "-c",
+            "-col",
             "--columns",
             nargs="*",
             default=default_cols,
             help=("Demographic variables to match subsets on. By default, the "
                   "subsets will be matched on these variables: {}"
                   .format(default_cols))
+        )
+
+    def comparisons():  # Optional: Specify which comparisons to run
+        comparison_keys = default_vis_titles().copy()
+        comparison_keys.pop(None)
+        comparison_keys = list(comparison_keys.keys())
+        comparison_keys.sort()
+        parser.add_argument(
+            "--comparisons",
+            nargs="*",
+            choices=comparison_keys,
+            default=comparison_keys,
+            help=("List of comparisons to output data about. By default, the "
+                  "script will compare each subset of the first group to the "
+                  "entire second group ('{0}'), each subset of the second "
+                  "group to the entire first group ('{2}'), and each group's "
+                  "subset to the other group's subset ('{1}').")
         )
 
     # Optional: Names of columns which are continuous, not categorical, vars
@@ -739,6 +842,24 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             default=default_continuous_vars,
             help=("All names of columns in the demographics .csv file which "
                   "have continuous instead of categorical data.")
+        )
+
+    def demo_col_mx():
+        parser.add_argument(
+            "-demo-col-mx-path",
+            "--demographics-column-matrix-path",
+            dest="demo_col_mx",
+            default=default_demo_col_mx_path,
+            help=help_demo_col + "paths to .nii matrix files."
+        )
+
+    def demo_col_subj():
+        parser.add_argument(
+            "-demo-col-subj-ID",
+            "--demographics-column-subject-ID",
+            dest="demo_col_subj",
+            default=default_demo_col_subj_ID,
+            help=help_demo_col + "subject IDs."
         )
 
     # Optional: Custom logarithmic function for Euclidean distance threshold
@@ -793,31 +914,28 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   .format(", ".join(default_vis_titles().values())))
         )
 
-    # Optional: Path to average matrix .nii file for group 1
-    def group_1_avg_file():
+    def group_1_avg_file():  # Optional: Group 1 average matrix .nii file path
         parser.add_argument(
             "-avg1",
             as_cli_arg(GP_AV_FILE, 1),
             help=help_group_avg_file.format(1)
         )
 
-    # Optional: Path to average matrix .nii file for group 2
-    def group_2_avg_file():
+    def group_2_avg_file():  # Optional: Group 2 average matrix .nii file path
         parser.add_argument(
             "-avg2",
             as_cli_arg(GP_AV_FILE, 2),
             help=help_group_avg_file.format(2)
         )
 
-    # Optional: Path to matrix variance .nii file for group 1
-    def group_1_var_file():
+    def group_1_var_file():  # Optional: Group 1 variance matrix .nii file path
         parser.add_argument(
             "-var1",
             as_cli_arg(GP_VAR_FILE, 1),
             help=help_group_var_file.format(1)
         )
     
-    def group_2_var_file():  # Optional: Path to matrix variance .nii file for group 2
+    def group_2_var_file():  # Optional: Group 2 variance matrix .nii file path
         parser.add_argument(
             "-var2",
             as_cli_arg(GP_VAR_FILE, 2),
@@ -874,11 +992,10 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "visualization. {}".format(help_matlab))
         )
 
-    def matlab_show_thresh():
+    def matlab_show():
         parser.add_argument(
             "-mat-show",
-            "--matlab-show-thresh",
-            dest="matlab_show",
+            "--matlab-show",
             action="store_true",
             help=("Include this flag to display the threshold as a line on "
                   "the output visualization. {}".format(help_matlab))
@@ -908,8 +1025,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
                   "at on the visualization. {}".format(help_matlab))
         )
 
-    # Optional: .conc file with paths to group 1 matrix files
-    def matrices_conc_1():
+    def matrices_conc_1():  # Optional: .conc file w/ group 1 matrix file paths
         parser.add_argument(
             "-conc1",
             as_cli_arg(GP_MTR_FILE, 1),
@@ -917,8 +1033,7 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
             help=help_matrices_conc.format(1)
         )
 
-    # Optional: .conc file with paths to group 2 matrix files
-    def matrices_conc_2():
+    def matrices_conc_2():  # Optional: .conc file w/ group 2 matrix file paths
         parser.add_argument(
             "-conc2",
             as_cli_arg(GP_MTR_FILE, 2),
@@ -1035,6 +1150,20 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
         )
    
 
+    def roi_subset():  # Optional: Correlate random ROIs of, not entire, matrix
+        parser.add_argument(
+            "-roi",
+            "--roi-subset",
+            type=lambda x: x if (x is None) else valid_whole_number(x),
+            help=("By default, the script will compare a subset's entire "
+                  "matrix to a group's entire matrix. Include this argument "
+                  "to instead compare a randomly selected subset of ROIs, such "
+                  "that the same ROIs are compared in each matrix. This "
+                  "argument must be an integer greater than zero, specifying "
+                  "how many ROIs to randomly select.")
+        )
+
+
     def rounded_scatter():  # Optional: Fewer points in scatter plot
         parser.add_argument(
             "-round",
@@ -1142,11 +1271,9 @@ def is_subset_csv(path, subset_filename_parts, n_analyses):
         assert os.path.splitext(path)[1] == ".csv"
         with open(path, "r") as infile:
             row_1 = infile.readline().strip().split(",")
-        name = os.path.basename(path)
-        match = re.search(r"(\d+)", name)
-        result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2"
-                  and all(part in name for part in subset_filename_parts)
-                  and match and (int(match.group()) <= n_analyses))
+        result = (len(row_1) == 2 and row_1[0] == "1" and row_1[1] == "2" and
+                  all(part in os.path.basename(path) for part in
+                      subset_filename_parts))
     except (OSError, argparse.ArgumentTypeError, AssertionError):
         result = False
     return result
@@ -1216,26 +1343,41 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
     stuck_if_at_10 = 0
 
     # Local function to shuffle a subset if the swapping process gets stuck
-    def shuffle_subsets(subset_IDs, shuffle_out, other_sibs, stuck_if):
+    def shuffle_subsets(subset_IDs, shuffle_out, other_sibs, stuck_if,
+                        after=True):
         """
         :param subset_IDs: Set of strings (all of the subset's subject IDs)
         :param shuffle_out: Set of strings (all subject IDs to remove)
         :param other_sibs: Set of strings (all subject IDs not in subset)
         :param stuck_if: Integer used as counter to trigger shuffling
+        :param after: False to return subset, its IDs, and its subjects missing
+                      siblings after remaking subset; else True to get stuck_if
         :return: stuck_if, but reset to 0 if a subset with fewer invalid 
                  subjects was created by shuffling some subjects around
         """
         subset_IDs = shuffle_out_subset_of(subset_IDs, shuffle_out, other_sibs)
-        shuffled_subset = group[group[id_var].isin(subset_IDs)]
         missing_post_shuffle = set()
-        collect(subset, missing=missing_post_shuffle)
-        return (0 if len(missing_post_shuffle) < len(subs_missing_sibs)
-                else stuck_if)
+        subset = group[group[id_var].isin(subset_IDs)]  # Moved 2021-04-30
+        if after:
+            collect(subset, missing=missing_post_shuffle)
+        else:
+            # subset = group[group[id_var].isin(subset_IDs)]
+            collect(subset)
+        return (0 if len(missing_post_shuffle) < len(subs_missing_sibs) else
+                stuck_if) if after else (subset, subset_IDs, subs_missing_sibs)
 
     # Keep swapping missing siblings in/out of the subset until the subset has 
     # no subjects with siblings not in the subset, then return the valid subset
     while len(subs_missing_sibs) > 0:
         mis_sibs_before = len(subs_missing_sibs)
+
+        # TODO check if the block below replicates the commented block
+        """
+        subset, subset_IDs, subs_missing_sibs = shuffle_subsets(
+            subset_IDs, subs_missing_sibs,
+            all_sibling_IDs.difference(subset_IDs), stuck_if_at_10, False
+        )
+        """
         subset_IDs = shuffle_out_subset_of(
             subset_IDs, subs_missing_sibs,
             all_sibling_IDs.difference(subset_IDs)
@@ -1243,6 +1385,7 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
         subset = group[group[id_var].isin(subset_IDs)]
         subs_missing_sibs = set()
         collect(subset)
+        
         if len(subs_missing_sibs) == mis_sibs_before:
             stuck_if_at_10 += 1
         shuffle_out = set(random.sample(subset_IDs, 10))
@@ -1251,13 +1394,12 @@ def make_subset_valid(subs_missing_sibs, collect, subset, group, rel, id_var,
             all_sibling_IDs.difference(subset_IDs, shuffle_out), stuck_if_at_10
         )
 
-    # If an extra subject was added to the subset, then remove them
+    # If an extra subject was added to the subset, then remove them and return
     if len(subset) > subset_size:
         to_remove = subset.sample(n=1)
         while to_remove[rel].iloc[0] > 0:
             to_remove = subset.sample(n=1)
         subset = subset.drop(to_remove.index)
-
     return subset 
 
 
@@ -1286,6 +1428,23 @@ def other_group_n(gp_num):
             else {"1": "2", "2": "1"}[gp_num])
 
 
+def prepare_2_subsets(subset1, subset2, rand_indices, cli_args):
+    """
+    :param subset1: pandas.DataFrame
+    :param subset2: pandas.DataFrame
+    :param rand_indices: List of randomly selected indices of both flat subsets
+    :param cli_args: argparse namespace with all given command-line arguments
+    :return: Tuple of both subsets, but flat (and stripped down to the indices
+             in rand_indices if the user used the --roi-subset argument)
+    """
+    subset1 = subset1.flatten()
+    subset2 = subset2.flatten()
+    if cli_args.roi_subset:
+        subset1 = get_specific_sublist_of(subset1, rand_indices)
+        subset2 = get_specific_sublist_of(subset2, rand_indices)
+    return subset1, subset2
+
+
 def print_col_headers_and_get_widths(headers):
     """
     Prints the headers of every column in the chart of generated subsets' chi-
@@ -1297,6 +1456,19 @@ def print_col_headers_and_get_widths(headers):
     print("Subsets randomly generated:\n"
           + fit_strings_to_width(headers, col_widths))
     return col_widths
+
+
+def randint_list(start, stop, how_many):
+    """ 
+    :param start: Integer, the index to start at
+    :param stop: Integer, the index to end at
+    :param how_many: Integer, the length of the list to return
+    :return: List of integers randomly selected from the specified range
+    """
+    result = [0] * how_many
+    for i in range(how_many):
+        result[i] = random.randint(start, stop)
+    return result
 
 
 def randomly_select_subset(group, group_n, sub_n, diff_group,
@@ -1319,9 +1491,10 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
     # Get information about group total dataframe for chi square comparison,
     # excluding any column where all subjects have the same value (GROUP) or
     # nearly all have different values (rel_family_id)
-    columns = group.select_dtypes(include=["number"]).drop([
-        "GROUP", "rel_family_id"
-    ], axis="columns")
+    columns = group.select_dtypes(include=["number"])
+    for to_drop in ("GROUP", "rel_family_id"):
+        if to_drop in columns:
+            columns = columns.drop([to_drop], axis="columns")
     group_avgs = get_group_avgs_or_vars(diff_group, columns)
     
     # Randomly pick subsets until finding 1 that demographically represents    
@@ -1334,7 +1507,7 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
 
         # Generate subset of group and get its columns' averages as a list
         subset = (group.sample(n=sub_n) if cli_args.no_matching
-                  else get_subset_of(group, sub_n))
+                  else get_subset_of(group, sub_n, cli_args.demo_col_subj))
         sub_avgs = get_group_avgs_or_vars(subset, columns)
 
         # If any column in subset averages has mean of N/A, throw it out
@@ -1354,7 +1527,6 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
                     "Subset", "Group", "Statistic", "P-Value",
                     "Significant Difference", "Euclidean Distance"
                 ))
-
     return subset if eu_threshold else eu_dist
 
 
@@ -1366,7 +1538,28 @@ def read_file_into_list(filepath):
     """
     with open(filepath, "r") as infile:
         return [line.strip() for line in infile] 
-        
+
+
+def read_in_subset_from(subset_csv, cli_args, gp_demo_str, sub_ID_var):
+    """
+    Read subset from file into pandas.DataFrame 
+    :param subset_csv: String, valid path to a real .csv file with subsets
+    :param cli_args: argparse.Namespace object with the attributes/arguments
+                     subset_size, group_1_demo, and group_2_demo
+    :param gp_demo_str: String naming the cli_args group demographics attribute
+    :param sub_ID_var: String naming the subject ID variable in the group
+                       demographics files
+    :return: Dictionary with both subsets' pd.DataFrames and the subsets' size
+    """
+    result = None
+    subset_df = pd.read_csv(subset_csv)
+    if ("1" in subset_df and "2" in subset_df 
+            and len(subset_df.index) in cli_args.subset_size):
+        result = get_gp_subsets_demo(subset_df, cli_args,
+                                     gp_demo_str, sub_ID_var)
+        result["subset_size"] = len(subset_df.index)
+    return result
+
 
 def rename_exacloud_path(path):
     """

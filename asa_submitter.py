@@ -4,7 +4,7 @@
 SBATCH job submitter for automated subset analysis
 Greg Conan: conan@ohsu.edu
 Created 2020-01-03
-Updated 2020-02-12
+Updated 2021-05-03
 """
 
 ##################################
@@ -13,19 +13,27 @@ Updated 2020-02-12
 # processing on the Exacloud server
 #
 ##################################
-
-# Imports
 import argparse
-from automated_subset_analysis import validate_cli_args
 import os
-from src.conan_tools import *
 import subprocess
+import sys
 import time
 
+# Ensure that this script can find its local imports if parallel processing
+if "--parallel" in sys.argv:
+    sys.path.append(os.path.abspath(sys.argv[sys.argv.index("--parallel")
+                                             + 1]))
+
+# Local custom imports
+from automated_subset_analysis import validate_cli_args
+from src.conan_tools import *
+
 # Constants: Demographics and job argument names, automated_subset_analysis dir
+ASA = "automated_subset_analysis.py"
 GP_DEMO_FILE = "group_{}_demo_file"
 JOB_SHORTNAME = "automate"
-PWD = get_pwd()
+PWD = sys.path[-1] if '--parallel' in sys.argv else get_pwd()
+
 
 def main():
 
@@ -34,13 +42,19 @@ def main():
 
     # Get and validate all command-line arguments from user
     cli_args = get_submitter_cli_args(
-        ("Script to run many instances of automated_subset_analysis.py in "
-         "parallel."), get_ASA_arg_names(), PWD
+        "Script to run many instances of {} in parallel.".format(ASA),
+        get_ASA_arg_names(), PWD
     )
 
-    cli_args["sbatch"] = ["sbatch", "--time={}".format(cli_args["time"]), 
-                          "--mem=1gb", "-c", "1", "-A", "fnl_lab",
-                          os.path.join(PWD, "automated_subset_analysis.py")]
+    slurm_out = os.path.join(cli_args["output"], "slurm-out-{}.txt".format(
+        now().strftime("%Y-%b-%d-%H-%M")
+    ))
+    open(slurm_out, "w+").close() # os.makedirs(slurm_out, exist_ok=True) 
+    cli_args["sbatch"] = [
+        "sbatch", "--time={}".format(cli_args["time"]), "--output", slurm_out,
+        "-A", cli_args["account"], "--mem={}gb".format(cli_args["memory"]), 
+        "-c", str(cli_args["cpus"]), os.path.join(PWD, ASA)
+    ]
 
     try:
         submit_batch_jobs(cli_args)
@@ -74,15 +88,35 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
     
     # This block differs from conan_tools.get_cli_args by adding a new 
     # argument and converting cli_args into a dictionary
+    default_acct = "feczk001"
     default_jobs = 100
+    default_gb_mem = 1
     default_sleep = 60
     default_time_limit = "04:00:00"
+    parser.add_argument(
+        "-A", "--account",
+        default=default_acct,
+        help="Name of the account to submit the SBATCH job under."
+    )
+    parser.add_argument(
+        "-c", "--cpus",
+        type=valid_whole_number,
+        default=default_gb_mem,
+        help=("Number of CPUs to assign to each SBATCH job.")
+    )
+    parser.add_argument(
+        "-mem", "--memory",
+        type=valid_whole_number,
+        default=default_gb_mem,
+        help=("Memory in gigabytes (GB) to assign to each sbatch job. The "
+              "default number is {} GB.".format(default_gb_mem))
+    )
     parser.add_argument(
         "-print-cmd",
         "--print-command",
         action="store_true",
         help=("Include this flag to print every command that is run to submit "
-              "an automated_subset_analysis.py batch job.")
+              "an {} batch job.".format(ASA))
     )
     parser.add_argument(
         "-q", "-queue",
@@ -107,10 +141,10 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
         dest="time",
         type=valid_time_str,
         default=default_time_limit,
-        help=("Time limit for each automated_subset_analysis batch job. The "
-              "time limit must be formatted specifically as HH:MM:SS where HH "
-              "is hours, MM is minutes, and SS is seconds. {} is the default "
-              "time limit.".format(default_time_limit))
+        help=("Time limit for each {} batch job. The time limit must be "
+              "formatted specifically as HH:MM:SS where HH is hours, MM is "
+              "minutes, and SS is seconds. {} is the default time limit."
+              .format(ASA, default_time_limit))
     )
     return vars(validate(parser.parse_args(), parser)
                 if validate else parser.parse_args())
@@ -118,7 +152,7 @@ def get_submitter_cli_args(script_description, arg_names, pwd, validate=None):
 
 def get_asa_options(cli_args):
     """
-    :param cli_args: argparse namespace with all validated command-line
+    :param cli_args: Dictionary with all validated command-line
                      arguments, all of which are used by this function
     :return: List of some cli_args optional arguments and their values
     """
@@ -164,7 +198,7 @@ def count_jobs_running():
 def get_batch_command(cli_args, out_num, subset_size):
     """
     Get command to run automated_subset_analysis batch job
-    :param cli_args: argparse namespace with all validated command-line
+    :param cli_args: Dictionary with all validated command-line
                      arguments, all of which are used by this function
     :param out_num: Integer from 1 to cli_args["n_analyses"] representing which
                     analysis this batch command is
@@ -176,7 +210,7 @@ def get_batch_command(cli_args, out_num, subset_size):
         cli_args[GP_DEMO_FILE.format(1)],
         cli_args[GP_DEMO_FILE.format(2)],
         "--output",
-        os.path.join(cli_args["output"],"output{}".format(out_num)),
+        os.path.join(cli_args["output"], OUTPUT_DIRNAME.format(out_num)),
         "--n-analyses", "1",
         "--parallel", PWD,
         "--subset-size", str(subset_size)
@@ -186,7 +220,7 @@ def get_batch_command(cli_args, out_num, subset_size):
 def submit_batch_jobs(cli_args):
     """
     Submit automated_subset_analysis batch jobs to run in parallel
-    :param cli_args: argparse namespace with all validated command-line
+    :param cli_args: Dictionary with all validated command-line
                      arguments, all of which are used by this function
     :return: N/A
     """   
@@ -194,11 +228,12 @@ def submit_batch_jobs(cli_args):
     keep_adding_jobs = True
     out_num = 0
     while len(all_jobs_subset_sizes) > 0:
+        jobs_running = count_jobs_running()
         with open("./submissions.txt", "a+") as infile:  # TODO remove this print?
             infile.write("keep_adding_jobs: {}, len(all_jobs_subset_sizes): "
                          "{}, out_num: {}, running: {}, queue_max: {}\n"
                          .format(keep_adding_jobs, len(all_jobs_subset_sizes),
-                                 out_num, count_jobs_running(),
+                                 out_num, jobs_running,
                                  cli_args["queue_max_size"]))
         if keep_adding_jobs:
             if all_jobs_subset_sizes[-1] == cli_args["subset_size"][-1]:
@@ -207,7 +242,7 @@ def submit_batch_jobs(cli_args):
                 cli_args, out_num, all_jobs_subset_sizes.pop()
             ))
         time.sleep(cli_args["sleep"])
-        keep_adding_jobs = count_jobs_running() < cli_args["queue_max_size"]
+        keep_adding_jobs = jobs_running < cli_args["queue_max_size"]
 
 
 if __name__ == "__main__":
