@@ -1,12 +1,8 @@
-# Automated Subset Analysis
+# Making Demographically Matched Subsets
 
-These automated split-half subset reliability analysis scripts were written for the ABCD resource paper. They use Python's `argparse` package so that it can be run from the BASH command line and accept command-line arguments.
+This code base generates demographically matched subsets. It was specifically designed for ABCD, but can be used for other data repositories as well. It randomly selects subsets of each ABCD ARM and checks whether they have a statistically significant difference on any of the given demographic variables. Once it finds a subset of each ARM where each does not statistically differ on those variables from the other ARM, it saves each subset pair to a .csv file. It also outputs correlation values between the subsets and the groups, and graph visualizations of those correlations.
 
-*The rest of this README focuses on `automated_subset_analysis.py`. If you are looking for a description of `asa_submitter.py`, then see `src/README.md`.*
-
-## Purpose
-
-Randomly selects and compares pairs of subsets of data from two groups. `automated_subset_analysis.py` makes and saves the subsets, the correlation values between them and the groups, and graph visualizations of those correlations.
+For ABCC, see the full see the names and descriptions of the main demographic variables [here](https://collection3165.readthedocs.io/en/stable/recommendations/#2-the-bids-participants-files-and-matched-groups)
 
 ### Brief Explanation of Steps
 
@@ -34,24 +30,17 @@ Installation should be simple:
 
 - All of the Python packages required by this script which are not default can be found in this directory's `requirements.txt` file.
 
-### Limitations
-
-- This repository's Python code should theoretically be able to run on any operating system. However, so far it has only been tested on `*nix` systems. It may be unable to run on Windows or Mac. 
-
 ## Usage
 
-### Required Arguments (2)
+### Required Arguments for Generating Matched Subsets
 
-1. `group_1_demo_file` is a path to a `.csv` file which contains demographic data about all subjects in group 1. By default, the script will assume that the group 1 input demographics `.csv` file has a column of numerical data under each of these names:
+You must provide 2 csv files (`group_1_demo_file` and `group_2_demo_file`), each containing demographic data for all subjects in group 1 and group 2 respectively. The first line of each demographics file should list all of the column names. 
 
-    ```
-    demo_comb_income_v2b, demo_ed_v2, demo_prnt_ed_v2b, demo_sex_v2b, ehi_y_ss_scoreb interview_age, medhx_9a, race_ethnicity, rel_relationship, site_id_l
-    ```
-
-
-    The last column of the demographics `.csv` file should be a list of paths (1 per line) to the `.nii` files of all subjects in group 1.
-
-1. `group_2_demo_file` is a path to a `.csv` file just like `group_1_demo_file`, but containing demographic data about all subjects in group 2.
+ - column 1 - should be blank because it is an index/enumerated column
+ - column 2 - Subject ID
+ - column 3 - group/ARM
+ - intermediate columns - demographic variables. By default, the script will assume the csv files contain columns of numerical data under each of these names: demo_comb_income_v2b, demo_ed_v2, demo_prnt_ed_v2b, demo_sex_v2b, ehi_y_ss_scoreb interview_age, medhx_9a, race_ethnicity, rel_relationship, site_id_l
+ - Final column: list of paths (1 per line) to the `.nii` files of all subjects in group 
 
 Example of a basic call to this script:
 
@@ -60,6 +49,12 @@ demo1=/home/user/conan/data/group1_pconn.csv
 demo2=/home/user/conan/data/group2_pconn.csv
 python3 automated_subset_analysis.py ${demo1} ${demo2}
 ```
+### Required Arguments for Group Average Matrices
+
+You will need either
+
+1. two averaged matrix `.pconn.nii` files, one for ARM-1 and another for ARM-2; or
+2. two `.conc` files listing `.pconn.nii` file paths. Each `.conc` file must list the path to every  each file matrix file for every individual subject in each ARM. 
 
 ### Optional Arguments (34)
 
@@ -185,6 +180,10 @@ Calculate the correlations between average matrices of already-generated subsets
 python3 automated_subset_analysis.py ${demo1} ${demo2} --skip-subset-generation ./subsets/ --output ./correls/
 ```
 
+## Output Files
+
+The script will save the demographically-matched subset pair into a text file in the `--output` directory. Each one will be named `subset_{x}_with_{y}_subjects.csv`, where `x` ranges from 1 to the `--n-analyses` value and `y` is every value in the `--subset-size` list. 
+
 ## Explanation of Process
 
 Two `.csv` files, each with demographic data about subjects from a group, are given by the user. One subset is randomly selected from each group repeatedly. The amount of subjects in each subset depends on `--subset-size`, and the number of times that amount is selected depends on `--n-analyses`.
@@ -213,6 +212,29 @@ The data used to calculate that equation can be found in `./src/euclidean_thresh
 1. Standard deviation bars above and below each data point (if `--plot` includes `stdev`), and
 1. A legend to identify all of these parts (unless `--hide-legend` is used).
 
+## Common Errors
+#### `Not enough subjects..` or `ValueError`
+
+Full error:<br>
+`Not enough subjects in population to randomly select a sample with {X} subjects, because {Y} subjects cannot be randomly swapped out from a pool of {Z} subjects`
+
+or
+
+`ValueError: Cannot take a larger sample than population when 'replace=False'`
+
+Problem: At least one of the `--subset-size` values is too high.
+
+Solutions:
+
+1. Reduce the largest `--subset-size` value to, at most, about 45% of the smallest ARM's size. 
+1. Include the `--no-matching` flag to skip family matching. 
+
+Explanation: 
+
+1. All `--subset-size` values must be large enough to demographically match the other ARM, but small enough to swap out any participants whose inclusion is invalid for any reason (e.g. they have family members outside the subset). For example, if the smallest ARM has 3000 subjects, then errors will occur unless you keep the `--subset-size` numbers under 1500. If the errors may still occur,you can try reducing the largest `--subset-size` further. The new subset size must be less than about 45% of the smallest ARM's size excluding participants with NaNs in the demographic file. The number and percentage of participants with NaNs in each group is printed right after the script begins.
+1. By default, `automated_subset_analysis.py` checks that every subset (a) has the same proportion of twins/triplets as the other ARM, and (b) excludes anyone with family members outside the subset. The `--no-matching` flag turns both checks off. It lets you to generate subsets of less than 25, or larger than half the ARM size. It also speeds up subset generation/checking.
+
+   
 ## Metadata
 
 Information about this `README` file:
