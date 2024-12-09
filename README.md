@@ -171,13 +171,19 @@ For more information, including the shorthand flags for each option, run this sc
 Generate 50 subsets and save a `.csv` file of each, including 10 subsets each of sizes 50, 100, 300, 500, and 1000:
 
 ```sh
-python3 automated_subset_analysis.py ${demo1} ${demo2} --subset-size 50 100 300 500 1000 --n-analyses 10
+python3 automated_subset_analysis.py \
+${demo1} ${demo2} \
+--subset-size 50 100 300 500 1000 \
+--n-analyses 10
 ```
 
 Calculate the correlations between average matrices of already-generated subsets in the `./subsets/` folder, then save the correlations and a visualization of them to the `./correls/` folder:
 
 ```sh
-python3 automated_subset_analysis.py ${demo1} ${demo2} --skip-subset-generation ./subsets/ --output ./correls/
+python3 automated_subset_analysis.py \
+${demo1} ${demo2} \
+--skip-subset-generation ./subsets/ \
+--output ./correls/
 ```
 
 ## Output Files
@@ -199,7 +205,12 @@ Once the correlation `.csv` files are made, the script will make a graph visuali
 <sup>1</sup> The equation currently used in `automated_subset_analysis.py` to predict significant Euclidean distance threshold using subset size was found using this Bash code:
 
 ```sh
-python3 ./src/euclidean_threshold_estimator.py ./raw/ABCD_2.0_group1_data_10minpconns.csv ./raw/ABCD_2.0_group2_data_10minpconns.csv -con-vars ./automated_subset_analysis_files/continuous_variables.csv --subset-size 1300 1200 1100 1000 900 800 700 600 500 400 300 200 100 90 80 70 60 50 --n-analyses 10
+python3 ./src/euclidean_threshold_estimator.py \
+./raw/ABCD_2.0_group1_data_10minpconns.csv \
+./raw/ABCD_2.0_group2_data_10minpconns.csv \
+-con-vars ./automated_subset_analysis_files/continuous_variables.csv \
+--subset-size 1300 1200 1100 1000 900 800 700 600 500 400 300 200 100 90 80 70 60 50 \
+--n-analyses 10
 ```
 
 The data used to calculate that equation can be found in `./src/euclidean_threshold_estimate_data/est-eu-thresh-2019-12-12`.
