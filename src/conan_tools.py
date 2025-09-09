@@ -5,6 +5,7 @@ Conan Tools
 Greg Conan: conan@ohsu.edu or gconan@umn.edu
 Created 2019-11-26
 Updated 2021-08-24
+Updated 2025-09-09 to fix average/variance matrix creation by Tanya Pandhi
 """
 
 ##################################
@@ -26,14 +27,6 @@ from scipy import stats
 from scipy.spatial import distance
 import socket
 import sys 
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import Ridge, Lasso
-from sklearn.neural_network import MLPRegressor
-from sklearn.model_selection import cross_val_score
-from sklearn.metrics import mean_squared_error
-import optuna
-from scipy.optimize import differential_evolution, minimize
 import warnings
 warnings.filterwarnings('ignore')
 

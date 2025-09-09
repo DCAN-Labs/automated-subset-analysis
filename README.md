@@ -39,8 +39,8 @@ You must provide 2 csv files (`group_1_demo_file` and `group_2_demo_file`), each
  - column 1 - should be blank because it is an index/enumerated column
  - column 2 - Subject ID
  - column 3 - group/ARM
- - intermediate columns - demographic variables. By default, the script will assume the csv files contain columns of numerical data under each of these names: demo_comb_income_v2b, demo_ed_v2, demo_prnt_ed_v2b, demo_sex_v2b, ehi_y_ss_scoreb interview_age, medhx_9a, race_ethnicity, rel_relationship, site_id_l
- - Final column: list of paths (1 per line) to the `.nii` files of all subjects in group 
+ - intermediate columns - demographic variables. By default, the script will assume the csv files contain columns of numerical data under each of these names: demo_comb_income_v2b, demo_ed_v2, demo_prnt_ed_v2b, demo_sex_v2b, ehi_y_ss_scoreb interview_age, medhx_9a, race_ethnicity, rel_relationship,rel_family_id, rel_group_id, site_id_l
+ - Final column: list of paths (1 per line) to the `.nii` files of all subjects in group (not needed if `--matrices-conc-1` or `--matrices-conc-2` is given)
 
 Example of a basic call to this script:
 
@@ -60,13 +60,14 @@ You will need either
 
 #### File Paths with Default Values (7)
 
-1. `--group-1-avg-file` takes one valid path to a readable `.nii` file containing the average matrix for the entire group 1. By default, this path will be to the `group1_10min_mean.pconn.nii` file in this script's parent folder or in the `--output` folder.
+1. `--group-1-avg-file` takes one valid path to a readable `.nii` file containing the average matrix for the entire group 1. By default, this path will be to the `*_group1avg*.nii` file in this script's parent folder or in the `--output` folder. If the flag is not included, the script will look for the file in those two places and will generate the avergage matrix if it cannot find it.
 
-1. `--group-2-avg-file` also takes one valid path to a readable `.nii` file, just like `--group-1-avg-file`. By default, it will point to the `group2_10min_mean.pconn.nii` file in one of the same places.
+1. `--group-2-avg-file` also takes one valid path to a readable `.nii` file, just like `--group-1-avg-file`. By default, it will point to the `*_group2avg*.nii` file in one of the same places and will generate the avergage matrix if it cannot find it.
 
-1. `--group-1-var-file` also takes a valid `.nii` file path pointing to group 1's total variance matrix. By default, it will point to the `group1_variance_matrix.*.nii` file in one of the same places.
+1. `--group-1-var-file` also takes a valid `.nii` file path pointing to group 1's total variance matrix. By default, it will point to the `*_group1var*.nii` file in one of the same places and will generate the variance matrix if it cannot find it.
 
-1. `--group-2-var-file` also takes a valid `.nii` file path pointing to group 2's total variance matrix. By default, it will point to the `group2_variance_matrix.*.nii` file in one of the same places.
+1. `--group-2-var-file` also takes a valid `.nii` file path pointing to group 2's total variance matrix. By default, it will point to the `*_group2var*.nii` file in one of the same places and will generate the variance matrix if it cannot find it.
+
 
 1. `--matrices-conc-1` takes one path to a readable `.conc` file containing only a list of valid paths to group 1 matrix files. This flag is only needed if your group 1 demographics `.csv` file either does not have a column labeled `'pconn10min'` with paths to matrix files, or if it does include that column but you want to use different paths.
 
