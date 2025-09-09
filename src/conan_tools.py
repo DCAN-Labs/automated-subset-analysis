@@ -26,6 +26,16 @@ from scipy import stats
 from scipy.spatial import distance
 import socket
 import sys 
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import Ridge, Lasso
+from sklearn.neural_network import MLPRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import mean_squared_error
+import optuna
+from scipy.optimize import differential_evolution, minimize
+import warnings
+warnings.filterwarnings('ignore')
 
 # Constants: Names of common automated_subset_analysis argparse parameters
 GP_AV_FILE = "group_{}_avg_file"
@@ -49,7 +59,7 @@ VAR = "variance"
 
 def add_and_validate_gp_file(cli_args, gp_num, parser, gp_file_arg):
     """
-    Get and validate path to a group's average or variance matrix, if not given
+    Get and validate path to a group's average or variance matrix, creating it if needed
     :param cli_args: argparse namespace with most needed command-line
                      arguments. This function uses the --matrices-conc-{} and
                      --example-file arguments, but only the former is required
@@ -58,33 +68,212 @@ def add_and_validate_gp_file(cli_args, gp_num, parser, gp_file_arg):
     :param gp_file_arg: String naming the cli_args attribute to add to cli_args
     :return: cli_args, but with the gp_file_arg argument for group gp_num
     """
+    import numpy as np
+    import nibabel as nib  # Assuming you're working with neuroimaging data
+    
     result_file_path = getattr(cli_args, gp_file_arg, None)
+    
     if not result_file_path:
         matr_conc = getattr(cli_args, GP_MTR_FILE.format(gp_num))
+        print('matr_conc:', matr_conc)
+        
         if not matr_conc:
             parser.error("Please provide the {} argument or the {} argument. "
                          .format(as_cli_arg(gp_file_arg.format(gp_num)),
                                  as_cli_arg(GP_MTR_FILE.format(gp_num))))
+        
         example = getattr(cli_args, EXAMPLE_FILE, None)
         if not example:
-            with open(matr_conc) as matr_conc_file_obj:
-                example = matr_conc_file_obj.readline().strip()
+            with open(matr_conc, 'r') as f:
+                line = f.readline().strip()
+                example = line.split(',')[0]
+                print("Example file path: {}".format(example))
+        
         if not os.path.exists(example):
             parser.error("Please provide the {} argument or the "
                          "--example-file argument.".format(as_cli_arg(
                             GP_MTR_FILE.format(gp_num)
                          )))
+        
+        print('gp_file_arg:', gp_file_arg)
+        print("gp_file_arg split:", gp_file_arg.split("_")[-2])
+        
+        # Construct the output file path
         result_file_path = os.path.join(cli_args.output, "".join((
             os.path.splitext(os.path.basename(matr_conc))[0],
             gp_file_arg.split("_")[-2], get_2_exts_of(example)
         )))
+        print("result_file_path:", result_file_path)
+        
+        # Check if the average file needs to be created
+        if (not os.path.exists(result_file_path) or should_recompute_average(matr_conc, result_file_path)):
+            create_average_matrix(matr_conc, result_file_path, example)
+        
         setattr(cli_args, gp_file_arg, result_file_path)
+    
     try:
         valid_readable_file(result_file_path)
         return cli_args
     except argparse.ArgumentTypeError as e:
         parser.error(str(e))
 
+
+def should_recompute_average(matr_conc_file, avg_file):
+    """
+    Check if average file should be recomputed based on modification times
+    """
+    if not os.path.exists(avg_file):
+        return True
+    
+    avg_mtime = os.path.getmtime(avg_file)
+    conc_mtime = os.path.getmtime(matr_conc_file)
+    
+    # Recompute if concentration file is newer than average file
+    return conc_mtime > avg_mtime
+
+
+def create_average_matrix(matr_conc_file, output_path, example_file):
+    """
+    Create average matrix from individual connectivity matrices
+    :param matr_conc_file: File containing list of connectivity matrix paths
+    :param output_path: Where to save the computed average
+    :param example_file: Example file to get header/affine info from
+    """
+    import numpy as np
+    try:
+        import nibabel as nib
+        from nibabel import cifti2
+        CIFTI_AVAILABLE = True
+    except ImportError:
+        print("Warning: nibabel.cifti2 not available. CIFTI files may not load properly.")
+        CIFTI_AVAILABLE = False
+    
+    # Read list of connectivity files (each line contains multiple comma-separated file paths)
+    conn_files = []
+    with open(matr_conc_file, 'r') as f:
+        for line in f:
+            if line.strip():
+                # Split by comma and add all file paths from this line
+                files_in_line = [path.strip() for path in line.strip().split(',') if path.strip()]
+                conn_files.extend(files_in_line)
+    
+    print(f"Found {len(conn_files)} connectivity files to average")
+    
+    # Validate that all files exist
+    missing_files = [f for f in conn_files if not os.path.exists(f)]
+    if missing_files:
+        raise FileNotFoundError(f"Missing connectivity files: {missing_files[:5]}...")
+    
+    matrices = []
+    
+    # Load all matrices
+    for i, conn_file in enumerate(conn_files):
+        print(f"Loading matrix {i+1}/{len(conn_files)}: {os.path.basename(conn_file)}")
+        
+        try:
+            if conn_file.endswith('.pconn.nii'):
+                # Handle CIFTI parcellated connectivity files
+                if CIFTI_AVAILABLE:
+                    img = nib.load(conn_file)
+                    matrix = img.get_fdata()
+                else:
+                    # Fallback: try to load as regular NIfTI
+                    img = nib.load(conn_file)
+                    matrix = img.get_fdata()
+            elif conn_file.endswith(('.nii', '.nii.gz')):
+                # Handle regular NIfTI files
+                img = nib.load(conn_file)
+                matrix = img.get_fdata()
+            elif conn_file.endswith(('.txt', '.csv')):
+                # Handle text files
+                matrix = np.loadtxt(conn_file, delimiter=',')
+            elif conn_file.endswith('.npy'):
+                # Handle numpy files
+                matrix = np.load(conn_file)
+            else:
+                # Try to load as text by default
+                matrix = np.loadtxt(conn_file)
+            
+            matrices.append(matrix)
+            
+        except Exception as e:
+            print(f"Error loading {conn_file}: {e}")
+            continue
+    
+    if not matrices:
+        raise ValueError("No valid matrices could be loaded")
+    
+    # Check that all matrices have the same shape
+    shapes = [m.shape for m in matrices]
+    if len(set(shapes)) > 1:
+        raise ValueError(f"Matrices have different shapes: {set(shapes)}")
+    
+    # Compute average
+    if 'avg' in output_path:
+        print(f"Computing average of {len(matrices)} matrices...")
+        avg_matrix = np.nanmean(matrices, axis=0)
+    elif 'var' in output_path:
+        print(f"Computing variance of {len(matrices)} matrices...")
+        avg_matrix = np.nanvar(matrices, axis=0)
+    
+    # Save the result
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    if output_path.endswith(('.pconn.nii', '.dscalar.nii')):
+        # Save as CIFTI parcellated connectivity file
+        if CIFTI_AVAILABLE:
+            try:
+                # Load example file to get the proper CIFTI structure
+                example_img = nib.load(example_file)
+                # Create new CIFTI image with averaged data but same header structure
+                avg_img = cifti2.Cifti2Image(avg_matrix, header=example_img.header)
+                nib.save(avg_img, output_path)
+                print(f"Saved as CIFTI .pconn.nii file")
+            except Exception as e:
+                print(f"Error saving as CIFTI: {e}")
+                print("Falling back to regular NIfTI format...")
+                # Fallback to regular NIfTI - but check if example is CIFTI first
+                example_img = nib.load(example_file)
+                if isinstance(example_img, nib.Cifti2Image):
+                    # Can't use CIFTI affine, create basic affine
+                    affine = np.eye(4)
+                    header = nib.Nifti1Header()
+                    avg_img = nib.Nifti1Image(avg_matrix, affine, header)
+                else:
+                    avg_img = nib.Nifti1Image(avg_matrix, example_img.affine, example_img.header)
+                nib.save(avg_img, output_path)
+        else:
+            # Fallback: save as regular NIfTI - but check if example is CIFTI first
+            example_img = nib.load(example_file)
+            if isinstance(example_img, nib.Cifti2Image):
+                # Can't use CIFTI affine, create basic affine
+                affine = np.eye(4)
+                header = nib.Nifti1Header()
+                avg_img = nib.Nifti1Image(avg_matrix, affine, header)
+            else:
+                avg_img = nib.Nifti1Image(avg_matrix, example_img.affine, example_img.header)
+            nib.save(avg_img, output_path)
+    elif output_path.endswith(('.nii', '.nii.gz')):
+        # Save as regular NIfTI
+        example_img = nib.load(example_file)
+        if isinstance(example_img, nib.Cifti2Image):
+            # Can't use CIFTI affine, create basic affine
+            affine = np.eye(4)
+            header = nib.Nifti1Header()
+            avg_img = nib.Nifti1Image(avg_matrix, affine, header)
+        else:
+            avg_img = nib.Nifti1Image(avg_matrix, example_img.affine, example_img.header)
+        nib.save(avg_img, output_path)
+    elif output_path.endswith('.npy'):
+        # Save as numpy
+        np.save(output_path, avg_matrix)
+    else:
+        # Save as text
+        np.savetxt(output_path, avg_matrix, delimiter=',')
+    
+    print(f"matrix saved to: {output_path}")
+    print(f"matrix shape: {avg_matrix.shape}")
+    print(f"matrix stats: min={avg_matrix.min():.4f}, max={avg_matrix.max():.4f}, mean={avg_matrix.mean():.4f}")
 
 def aggregate_data(qtl, all_data_df):
     """
@@ -179,7 +368,9 @@ def drop_nan_rows_from(group, group_num, nan_threshold, parser):
     :return: group without any of its rows that contained NaNs, if group has
              few enough NaNs to pass below the nan_threshold
     """
-    nans = sum(group.apply(lambda x: 1 if x.isnull().any() else 0))
+    print("shape of group {} demographics file: {}".format(group_num, group.shape))
+    # nans = sum(group.apply(lambda x: 1 if x.isnull().any() else 0))
+    nans = sum(group.apply(lambda x: 1 if x.isnull().any() else 0, axis=1))
     nans_percent = (nans / len(group.index))
     print("Percentage of rows in group {} demographics file with NaN "
           "values: {:.1%}".format(group_num, nans_percent))
@@ -189,6 +380,7 @@ def drop_nan_rows_from(group, group_num, nan_threshold, parser):
     else:
         parser.error("Too many rows with NaN values at threshold of "
                      "{:.1%}".format(nan_threshold))
+    print("shape of group {} demographics file after removing nan rows: {}".format(group_num, group.shape))
     return group
         
 
@@ -217,6 +409,7 @@ def extract_subject_id_from(path):
     :param path: String which is a valid path to a CIFTI2 matrix file
     :return: String which is the subject ID which was in path
     """
+    # print("Extracting subject ID from path: {}".format(path))
     if "NDAR" in path:
         # Variables are where in path subject ID starts, where in path the "_" 
         # between "NDAR" and "INV" is, and where in path the subject ID ends
@@ -230,6 +423,9 @@ def extract_subject_id_from(path):
         sub_id_pos = path.find("INV") + 3
         id_end_pos = sub_id_pos + 8
         subj_id = "sub-NDARINV" + path[sub_id_pos:id_end_pos]
+    elif "sub-" in path:
+        subj_id= path.split("/")[-1].split("_")[0]
+        # print("Extracted subject ID {} from path {}".format(subj_id, path))
     else:
         sys.exit("Cannot find subject ID ('NDAR_INVxxxxxxxx') in path {}"
                  .format(path))
@@ -317,7 +513,7 @@ def get_average_matrix(subset, paths_col, cli_args):
     subset_size = len(subset.index)
 
     # Get one matrix file to initialize the running total matrix & matrix list
-    subject_matrix_paths = subset[paths_col].iteritems()
+    subject_matrix_paths = subset[paths_col].items()
     running_total = load_matrix_from(next(subject_matrix_paths)[1])
     running_total_sq = np.square(running_total)
 
@@ -362,6 +558,7 @@ def get_cli_args(script_description, arg_names, pwd, validate_fn=None):
     parser = initialize_subset_analysis_parser(argparse.ArgumentParser(
         description=script_description
     ), pwd, arg_names)
+    print("Parsing command-line arguments...", parser.parse_args())
     return (validate_fn(parser.parse_args(), parser)
             if validate_fn else parser.parse_args())
 
@@ -474,6 +671,8 @@ def get_group_variance_matrix(gp_demo, cli_args, gp_num, matr_col):
     example = gp_demo[matr_col].iloc[0]
     gp_var_matrix_file = getattr(cli_args, GP_VAR_FILE.format(gp_num))
     if os.access(gp_var_matrix_file, os.R_OK):
+        print("Loading group {} variance matrix from {}".format(
+            gp_num, gp_var_matrix_file))
         gp_var_mx = load_matrix_from(gp_var_matrix_file)
     else:
         gp_var_mx = get_average_matrix(gp_demo, matr_col, cli_args)[VAR]
@@ -643,12 +842,17 @@ def get_subsets_from_dir(dirpath, all_subsets, cli_args, subset_name_parts,
                                                gp_demo_str, subj_ID_var)
         elif is_subset_csv(eachpath, subset_name_parts,
                            cli_args.n_analyses):
+            print("Reading in subset from {}".format(eachpath))
             sub_num = get_subset_number_from(eachpath)
+            print("Subset number is {}".format(sub_num))
             if sub_num is None or sub_num <= cli_args.n_analyses:
                 subset = read_in_subset_from(eachpath, cli_args,
                                              gp_demo_str, subj_ID_var)
+                print("Subset :",subset)
                 if subset:
                     all_subsets.append(subset)
+                    print("Added subset {} to all_subsets."
+                          .format(sub_num if sub_num is not None else ""))
             else:
                 break
     return all_subsets
@@ -681,6 +885,7 @@ def has_missing_siblings(subj_row, subset, ids):
     # If subject has no family in the group, they have no missing siblings
     mis_sibs = False    
     subj_rel = int(subj_row[ids["REL"]])
+    # print("Checking subject", subj_row[ids["GRP"]], "with relationship")
     if subj_rel > 0:
 
         # Sibling missing if subject has family in the group but not the subset
@@ -690,11 +895,13 @@ def has_missing_siblings(subj_row, subset, ids):
 
         # Sibling missing if a twin has no family in the subset
         elif subj_rel == 2:
-            twins = int(family[
-                family[ids["GRP"]] == subj_row[ids["GRP"]]
-            ][ids["GRP"]].tolist()[0])
-            if subj_rel != twins:
-                mis_sibs = True
+            twin_matches = family[family[ids["GRP"]] == subj_row[ids["GRP"]]]
+            if len(twin_matches) == 0:
+                mis_sibs = True  # Twin is missing from subset
+            else:
+                twins = int(twin_matches[ids["GRP"]].tolist()[0])
+                if subj_rel != twins:
+                    mis_sibs = True
 
         # Sibling missing if a triplet has <3 family members in subset
         elif len(family[family[ids["REL"]] == subj_row[ids["REL"]]]) <3:
@@ -734,11 +941,11 @@ def initialize_subset_analysis_parser(parser, pwd, to_add):
     default_continuous_vars = ['demo_prnt_ed_v2b', 'interview_age', 
                                'rel_group_id', 'rel_relationship']
     default_demo_col_mx_path = "pconn10min"
-    default_demo_col_subj_ID = "id_redcap"
+    default_demo_col_subj_ID = "Subject ID"
     default_euclid_vals = [-0.44897407617376806, 3.7026679337563486]
     default_marker_size = 5
     default_n_analyses = 1
-    default_nan_threshold = 0.1
+    default_nan_threshold = 0.3
     default_out_dir = os.path.join(pwd, "data")
     default_subset_size = [50, 100, 200, 300, 400, 500]
     default_text_size_axis = 30
@@ -1284,7 +1491,7 @@ def load_matrix_from(matrix_path):
     :param matrix_path: String which is the absolute path to a matrix file
     :return: numpy.ndarray matrix of data from the matrix file
     """
-    return np.array(nibabel.cifti2.load(matrix_path).get_data().tolist())
+    return np.array(nibabel.cifti2.load(matrix_path).get_fdata().tolist())
 
 
 def look_for_file(orig_path, cli_args, arg_name, pwd, parser):
@@ -1492,9 +1699,11 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
     # excluding any column where all subjects have the same value (GROUP) or
     # nearly all have different values (rel_family_id)
     columns = group.select_dtypes(include=["number"])
-    for to_drop in ("GROUP", "rel_family_id"):
+    print(f"group shape: {group.shape}, numeric columns: {columns.columns.tolist()}")
+    for to_drop in ("group", "rel_family_id", "rel_group_id", "rel_relationship"):
         if to_drop in columns:
             columns = columns.drop([to_drop], axis="columns")
+    print(f"Using columns: {columns.columns.tolist()}")
     group_avgs = get_group_avgs_or_vars(diff_group, columns)
     
     # Randomly pick subsets until finding 1 that demographically represents    
@@ -1517,6 +1726,7 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
 
             # Check significance of Euclidean distance, and show user
             eu_dist = distance.euclidean(group_avgs, sub_avgs)
+            # print("Subset size {}, Group {}: Euclidean distance = {:.4f}".format(sub_n, group_n, eu_dist))
             extra_args = [eu_threshold] if eu_threshold else [
                 subset, diff_group, columns.columns.tolist(),
                 cli_args.con_cols, col_widths
@@ -1528,7 +1738,6 @@ def randomly_select_subset(group, group_n, sub_n, diff_group,
                     "Significant Difference", "Euclidean Distance"
                 ))
     return subset if eu_threshold else eu_dist
-
 
 def read_file_into_list(filepath):
     """
@@ -1553,8 +1762,9 @@ def read_in_subset_from(subset_csv, cli_args, gp_demo_str, sub_ID_var):
     """
     result = None
     subset_df = pd.read_csv(subset_csv)
-    if ("1" in subset_df and "2" in subset_df 
-            and len(subset_df.index) in cli_args.subset_size):
+    print("Reading subset from {}...".format(subset_csv))
+    if ("1" in subset_df and "2" in subset_df):
+            # and len(subset_df.index) in cli_args.subset_size): # this will use the default suset_size when using skip_subset_generation
         result = get_gp_subsets_demo(subset_df, cli_args,
                                      gp_demo_str, sub_ID_var)
         result["subset_size"] = len(subset_df.index)

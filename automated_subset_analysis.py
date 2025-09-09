@@ -50,6 +50,7 @@ def main():
     starting_timestamp = get_and_print_timestamp_when(sys.argv[0], "started")
 
     # Get and validate all command-line arguments from user
+    print("Getting command-line arguments...")
     cli_args = get_cli_args(
         ("Script to randomly select pairs of subsets of data of given sizes, "
          "find the correlation between the average matrices of each subset, "
@@ -64,6 +65,7 @@ def main():
     else:
         # Make and save all subsets and their correlations, unless said to
         # get pre-existing subsets' correlations instead
+        print("Make and save all subsets and their correlations...")
         get_subs = (skip_subset_generation
                     if getattr(cli_args, "skip_subset_generation", None)
                     else save_and_get_all_subsets)
@@ -127,6 +129,7 @@ def validate_cli_args(cli_args, parser):
 
             # For each group, get the path to the directory with its .pconn
             # files, and the path to the file containing its demographic data
+            print("Getting paths to .pconn files...")
             cli_args = add_pconn_paths_to(cli_args, [1, 2], parser)
 
     except (OSError, argparse.ArgumentTypeError) as e:
@@ -148,11 +151,13 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
         group_demo_str = GP_DEMO_STR.format(gp_num)
         demographics = get_group_demographics(cli_args, gp_num,
                                               group_demo_str + "_file", parser)
-
+        print("First 5 rows of group {} demographics:\n{}".format(
+            gp_num, demographics.head()
+        ))
         # Add paths to matrices if the user gave paths in separate .conc file
         matr_conc = getattr(cli_args, GP_MTR_FILE.format(gp_num), None)
         setattr(cli_args, group_demo_str, demographics if not matr_conc else
-                replace_paths_column(cli_args, demographics, matr_conc))
+                replace_paths_column(cli_args, demographics, matr_conc, gp_num))
 
         # Get average matrix for each group
         gp_av_arg = GP_AV_FILE.format(gp_num)
@@ -168,29 +173,49 @@ def add_pconn_paths_to(cli_args, group_nums, parser):
                                                 gp_v_f)
             fname = ("group_{}_variance_matrix{}"
                      .format(gp_num, get_2_exts_of(GP_AV_FILE.format(gp_num))))
+            print("Saving group {} variance matrix to {}".format(
+                gp_num, os.path.join(cli_args.output, fname)
+            ))
             if not getattr(cli_args, gp_v_f, None):
-                setattr(cli_args, gp_v_f, os.path.join(cli_args.output, fname))
+                setattr(cli_args, gp_v_f, os.path.join(cli_args.output, fname))   
+            print('gp_v_f:', gp_v_f) 
     return cli_args
 
 
-def replace_paths_column(cli_args, demographics, matr_conc):
-    """
-    :param cli_args: argparse namespace with most needed command-line arguments
-    :param demographics: pandas.DataFrame with demographic information,
-                         including 0 or 1 column(s) with paths to matrix files
-    :param matr_conc: String, valid path to a .conc file with matrix file paths
-    :return: demographics, but replacing its previous paths column with the
-             contents of the matr_conc file
-    """
+def replace_paths_column(cli_args, demographics, matr_conc, gp_num):
+    # Read the .conc file as a single column of file paths
     matrix_paths = pd.read_csv(matr_conc, converters={
         0: rename_exacloud_path
-    }, sep="\n", header=None).rename(columns=lambda x: DEFAULT_DEM_VAR_MATR)    
-    matrix_paths[cli_args.demo_col_subj] = matrix_paths.apply(lambda x: (
-        extract_subject_id_from(x.loc[DEFAULT_DEM_VAR_MATR])
-    ), axis="columns")
+    }, header=None).rename(columns=lambda x: DEFAULT_DEM_VAR_MATR)
+    # matrix_paths_clean = (matrix_paths.T
+    #                  .reset_index(drop=True)
+    #                  .dropna()
+    #                  .rename(columns={0: 'matrix_file'}))
+    
+    print("First 5 rows of matrix paths from {}:\n{}".format(
+        matr_conc, matrix_paths.head()
+    ))
+
+    # Extract subject IDs from the file paths
+    matrix_paths[cli_args.demo_col_subj] = matrix_paths['matrix_file'].apply(
+        extract_subject_id_from
+    )
+    
+    # Remove existing matrix column if it exists
     if cli_args.demo_col_mx in demographics:
         demographics = demographics.drop(cli_args.demo_col_mx, axis=1)
-    return demographics.merge(matrix_paths, on=cli_args.demo_col_subj)
+    
+    # Merge on subject ID
+    merged_df = demographics.merge(matrix_paths, on=cli_args.demo_col_subj, how='inner')
+    
+    print("First 5 rows of demographics with matrix paths:\n{}".format(
+        merged_df[['Subject ID', 'matrix_file', 'group']].head()
+    ))
+    print("shape of demographics with matrix paths:\n{}".format(
+        merged_df.shape
+    ))
+    merged_df.to_csv(f'/home/midb_abcd/pandh015/ABCC_manuscript_analysis/automated-subset-analysis/sulcal_depth/demographics_with_matrix_paths_{gp_num}.csv', index=False)
+    return merged_df
     
 
 def only_make_graphs(cli_args):
@@ -238,6 +263,7 @@ def skip_subset_generation(cli_args, subsets_file_name):
         raise FileNotFoundError("".join(err).format(
             *cli_args.subset_size, os.path.abspath(cli_args.skip_subset_generation)
         ))
+    print("Found subsets:",all_subsets)
     return all_subsets
 
 
@@ -277,6 +303,14 @@ def save_and_get_all_subsets(cli_args, subsets_file_name):
                     ), cli_args, check_keep_looping,
                     natural_log(sub_n, cli_args.euclidean)
                 )
+                # subsets[group_n] = greedy_select_subset_multi_attempt(
+                #     getattr(cli_args, GP_DEMO_STR.format(group_n)),
+                #     group_n, sub_n, getattr(
+                #         cli_args, GP_DEMO_STR.format(other_group_n(group_n))
+                #     ), cli_args, check_keep_looping,
+                #     natural_log(sub_n, cli_args.euclidean)
+                # )
+                # 2
 
             # Save randomly generated subsets
             save_subsets(subsets, cli_args.output, i + 1,
@@ -337,6 +371,7 @@ def save_subset_effect_size_matrices(all_subsets, cli_args):
     :param cli_args: argparse namespace with all command-line arguments
     :return: Dictionary mapping name of subset pair to its effect sizes
     """
+    print("Calculating and saving effect size matrices...")
     # Get both groups' average matrices, group sizes, and variance matrices
     group_averages, gp_vars, gp_sizes = get_groups_avg_var_and_size(
         cli_args, get_matr_file_col_name(cli_args)
@@ -476,11 +511,14 @@ def get_avg_matrices_of_subsets(subsets_dict, cli_args):
     """
     avg_matrices = dict()  # Return value: Average matrices of both groups
     subsets_dict.pop("subset_size") 
+
+    print('subsets_dict: {}'.format(subsets_dict))
     
     # Get all data from .pconn files of every subject in the subset
     for sub_num, subset in subsets_dict.items():
         # if any(["sub{}".format(sub_num) in x for x in cli_args.comparisons]):
         col = get_matr_file_col_name(cli_args) 
+        print("Getting average matrix for group {} subset from column {}".format(sub_num, col))
         print("Making average matrix for group {} subset.".format(sub_num))
         avg_matrices[sub_num] = get_average_matrix(subset, col, cli_args)
     return avg_matrices
