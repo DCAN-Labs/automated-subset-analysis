@@ -45,10 +45,26 @@ You must provide 2 csv files (`group_1_demo_file` and `group_2_demo_file`), each
 Example of a basic call to this script:
 
 ```sh
-demo1=/home/user/conan/data/group1_pconn.csv
-demo2=/home/user/conan/data/group2_pconn.csv
+demo1=/path/to/group1_pconn.csv
+demo2=/path/to/group2_pconn.csv
 python3 automated_subset_analysis.py ${demo1} ${demo2}
 ```
+Example of a more complex call to this script:
+
+```sh
+demo1=/path/to/group1_pconn.csv
+demo2=/path/to/group2_pconn.csv
+mat1=/path/to/group1_matrices.conc
+mat2=/path/to/group2_matrices.conc
+outdir=/path/to/results/
+python3 automated_subset_analysis.py \
+${demo1} ${demo2} \
+--matrices-conc-1 ${mat1} \
+--matrices-conc-2 ${mat2} \
+--output ${outdir} \
+--subset-size 50 100 200 300 500 700 900 1200 \
+--n-analyses 5 \
+--plot scatter stdev 
 ### Required Arguments for Group Average Matrices
 
 You will need either
