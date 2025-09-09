@@ -65,6 +65,9 @@ ${demo1} ${demo2} \
 --subset-size 50 100 200 300 500 700 900 1200 \
 --n-analyses 5 \
 --plot scatter stdev 
+```
+
+
 ### Required Arguments for Group Average Matrices
 
 You will need either
